@@ -33,8 +33,9 @@ const PROVIDERS = [
     categoryId: 'dev',
     providers: [
       { id: 'opencode', name: 'OpenCode', fields: [
-        { key: 'url', label: 'Server URL', type: 'text', default: 'http://localhost:3000' },
-        { key: 'apiKey', label: 'API Key (Optional)', type: 'password' }
+        { key: 'url', label: 'Host URL', type: 'text', default: 'http://localhost:3000' },
+        { key: 'username', label: 'Username', type: 'text' },
+        { key: 'password', label: 'Password', type: 'password' }
       ]}
     ]
   },

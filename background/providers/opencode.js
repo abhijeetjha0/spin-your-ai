@@ -4,13 +4,20 @@ export class OpenCodeProvider extends BaseProvider {
   constructor(config) {
     super('opencode', config);
     this.baseUrl = this.normalizeUrl(this.config.url || 'http://localhost:3000');
-    this.apiKey = this.config.apiKey || '';
+    this.username = this.config.username || '';
+    this.password = this.config.password || '';
+  }
+
+  getAuthHeader() {
+    if (!this.username || !this.password) return null;
+    return `Basic ${btoa(this.username + ':' + this.password)}`;
   }
 
   async getModels() {
     try {
       const headers = {};
-      if (this.apiKey) headers['Authorization'] = `Bearer ${this.apiKey}`;
+      const authHeader = this.getAuthHeader();
+      if (authHeader) headers['Authorization'] = authHeader;
       
       const res = await fetch(`${this.baseUrl}/api/health`, { headers });
       if (!res.ok) throw new Error('OpenCode not running');
@@ -24,7 +31,8 @@ export class OpenCodeProvider extends BaseProvider {
 
   async *chat(modelId, messages, signal) {
     const headers = { 'Content-Type': 'application/json' };
-    if (this.apiKey) headers['Authorization'] = `Bearer ${this.apiKey}`;
+    const authHeader = this.getAuthHeader();
+    if (authHeader) headers['Authorization'] = authHeader;
 
     const prompt = messages[messages.length - 1].content;
     const res = await fetch(`${this.baseUrl}/api/chat`, {
