@@ -33,7 +33,10 @@ export class BaseProvider {
    */
   async testConnection() {
     try {
-      await this.getModels();
+      const models = await this.getModels();
+      if (!models || models.length === 0) {
+        return { ok: false, error: 'No models found or missing configuration.' };
+      }
       return { ok: true };
     } catch (e) {
       return { ok: false, error: e.message };

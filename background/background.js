@@ -17,8 +17,8 @@ chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
 // Active generation controllers for cancelling
 const activeGenerations = new Map();
 
-async function getProviderInstance(providerId) {
-  const config = await vault.getConfig(providerId);
+async function getProviderInstance(providerId, passedConfig = null) {
+  const config = passedConfig || await vault.getConfig(providerId);
   switch (providerId) {
     case 'ollama': return new OllamaProvider(config);
     case 'openai': return new OpenAIProvider(config);
@@ -43,7 +43,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
   
   if (request.type === 'TEST_CONNECTION') {
-    getProviderInstance(request.payload.providerId)
+    getProviderInstance(request.payload.providerId, request.payload.config)
       .then(provider => provider ? provider.testConnection() : { ok: false, error: 'Provider not found' })
       .then(sendResponse);
     return true;

@@ -4,7 +4,7 @@ export class HermesProvider extends OpenAIProvider {
   constructor(config) {
     super(config);
     this.id = 'hermes';
-    this.baseUrl = this.normalizeUrl(this.config.url || 'http://127.0.0.1:11434/v1');
+    this.baseUrl = this.normalizeUrl(this.config.url || 'http://localhost:8642/v1');
     this.apiKey = 'dummy-key'; 
   }
 

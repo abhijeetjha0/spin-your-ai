@@ -66,7 +66,7 @@ async function loadProviders() {
         
         data.models.forEach(model => {
           const opt = document.createElement('option');
-          opt.value = `${providerId}:${model.id}`;
+          opt.value = `${providerId}::${model.id}`;
           opt.textContent = model.name;
           optgroup.appendChild(opt);
         });
@@ -78,7 +78,7 @@ async function loadProviders() {
     // Set active model if any
     const active = await chrome.runtime.sendMessage({ type: 'GET_ACTIVE_MODEL' });
     if (active && active.providerId && active.modelId) {
-      modelSelector.value = `${active.providerId}:${active.modelId}`;
+      modelSelector.value = `${active.providerId}::${active.modelId}`;
     } else if (modelSelector.options.length > 1) {
       modelSelector.selectedIndex = 1; // Select first available
     }
@@ -87,7 +87,7 @@ async function loadProviders() {
 
 modelSelector.addEventListener('change', () => {
   if (modelSelector.value) {
-    const [providerId, modelId] = modelSelector.value.split(':');
+    const [providerId, modelId] = modelSelector.value.split('::');
     chrome.runtime.sendMessage({ type: 'SET_ACTIVE_MODEL', payload: { providerId, modelId } });
   }
 });
@@ -102,7 +102,7 @@ async function sendMessage() {
     return;
   }
   
-  const [providerId, modelId] = selectedModel.split(':');
+  const [providerId, modelId] = selectedModel.split('::');
 
   // Reset input
   chatInput.value = '';

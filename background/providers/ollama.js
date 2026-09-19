@@ -19,39 +19,60 @@ export class OllamaProvider extends BaseProvider {
   }
 
   async *chat(modelId, messages, signal) {
-    const res = await fetch(`${this.baseUrl}/api/chat`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: modelId,
-        messages: messages,
-        stream: true
-      }),
-      signal
-    });
+    let res;
+    try {
+      res = await fetch(`${this.baseUrl}/api/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: modelId,
+          messages: messages,
+          stream: true
+        }),
+        signal
+      });
+    } catch (e) {
+      throw new Error(`Failed to communicate with Ollama. Is it running? (${e.message})`);
+    }
 
     if (!res.ok) {
       const text = await res.text();
-      throw new Error(`Ollama Error: ${text}`);
+      let errorMsg = text;
+      try { errorMsg = JSON.parse(text).error || text; } catch (e) {}
+      
+      if (!errorMsg && res.status === 403) {
+        errorMsg = "CORS error (403 Forbidden). You must set OLLAMA_ORIGINS='*' or allow your extension ID before starting Ollama.";
+      } else if (!errorMsg) {
+        errorMsg = `HTTP ${res.status}`;
+      }
+      
+      throw new Error(`Ollama API Error: ${errorMsg}`);
     }
 
     const reader = res.body.getReader();
     const decoder = new TextDecoder('utf-8');
+    let buffer = '';
 
     try {
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-        const chunk = decoder.decode(value, { stream: true });
-        const lines = chunk.split('\n').filter(l => l.trim());
+        
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+        
         for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed) continue;
+          
           try {
-            const parsed = JSON.parse(line);
+            const parsed = JSON.parse(trimmed);
             if (parsed.message?.content) {
               yield parsed.message.content;
             }
           } catch (e) {
-            // ignore JSON parse errors on partial chunks
+            console.error('Ollama stream parse error:', e, line);
           }
         }
       }

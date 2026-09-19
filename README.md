@@ -17,6 +17,24 @@ A Manifest V3 Chrome Extension that lets you spin up AI models directly from you
 - **Dev Platforms:** OpenCode
 - **Tooling:** Any HTTP/SSE MCP Server
 
+## Configuration
+
+### Ollama (Local)
+By default, the Ollama server rejects API requests from browser extensions due to strict CORS (Cross-Origin Resource Sharing) policies. To allow Spin Your AI to connect to your local Ollama instance, you must configure Ollama to allow all origins using the `OLLAMA_ORIGINS` environment variable.
+
+**macOS / Linux (Terminal):**
+```bash
+OLLAMA_ORIGINS="*" ollama serve
+```
+
+**macOS (Ollama App):**
+1. Quit the Ollama application.
+2. Run `launchctl setenv OLLAMA_ORIGINS "*"` in your terminal.
+3. Restart the Ollama application.
+
+**Windows:**
+Set the `OLLAMA_ORIGINS` environment variable to `*` in your system environment variables before launching Ollama.
+
 ## Future Opportunities
 
 - **n8n Webhook Integration:** Trigger complex workflow automations directly from the extension.

@@ -7,7 +7,7 @@ const PROVIDERS = [
     providers: [
       { id: 'ollama', name: 'Ollama (Local)', fields: [{ key: 'url', label: 'Host URL', type: 'text', default: 'http://localhost:11434' }] },
       { id: 'openclaw', name: 'OpenClaw', fields: [{ key: 'url', label: 'Host URL', type: 'text', default: 'http://localhost:3141' }] },
-      { id: 'hermes', name: 'Hermes Desktop', fields: [{ key: 'url', label: 'Host URL', type: 'text', default: 'http://127.0.0.1:11434/v1' }] },
+      { id: 'hermes', name: 'Hermes Desktop', fields: [{ key: 'url', label: 'Host URL', type: 'text', default: 'http://localhost:8642/v1' }] },
     ]
   },
   {
@@ -189,10 +189,25 @@ function attachEvents() {
   document.querySelectorAll('.test-btn').forEach(btn => {
     btn.addEventListener('click', async (e) => {
       const id = e.target.dataset.id;
+      const form = document.getElementById(`form-${id}`);
+      
+      const formData = new FormData(form);
+      const config = {};
+      
+      for (let [key, value] of formData.entries()) {
+        const input = form.querySelector(`[name="${key}"]`);
+        if (input.readOnly && input.dataset.realValue) {
+          config[key] = input.dataset.realValue;
+        } else {
+          config[key] = value.trim();
+        }
+      }
+
       showToast(`Testing ${id}...`, 'info');
-      // In a real implementation we would call a specific test function on the background script
-      // For now we'll simulate the interface
-      const res = await chrome.runtime.sendMessage({ type: 'TEST_CONNECTION', payload: { providerId: id }});
+      const res = await chrome.runtime.sendMessage({ 
+        type: 'TEST_CONNECTION', 
+        payload: { providerId: id, config }
+      });
       if (res && res.ok) {
         showToast(`✅ Connection successful`, 'success');
       } else {
