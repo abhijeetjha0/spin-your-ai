@@ -64,7 +64,7 @@ async function loadProviders() {
         const optgroup = document.createElement('optgroup');
         optgroup.label = data.name || providerId;
         
-        data.models.forEach(model => {
+        data.models.sort((a, b) => a.name.localeCompare(b.name)).forEach(model => {
           const opt = document.createElement('option');
           opt.value = `${providerId}::${model.id}`;
           opt.textContent = model.name;
