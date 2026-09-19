@@ -21,7 +21,7 @@ export class GeminiProvider extends BaseProvider {
       const data = await res.json();
       
       return data.models
-        .filter(m => m.supportedGenerationMethods?.includes('generateContent') && m.name.includes('gemini'))
+        .filter(m => m.supportedGenerationMethods?.includes('generateContent'))
         .map(m => {
           const id = m.name.replace('models/', '');
           return { id, name: m.displayName || id };
