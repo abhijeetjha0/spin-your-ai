@@ -15,7 +15,21 @@ export class GeminiProvider extends BaseProvider {
 
   async getModels() {
     if (!this.apiKey) return [];
-    return this.defaultModels;
+    try {
+      const res = await fetch(`${this.baseUrl}/models?key=${this.apiKey}`);
+      if (!res.ok) throw new Error('Invalid API Key or network error');
+      const data = await res.json();
+      
+      return data.models
+        .filter(m => m.supportedGenerationMethods?.includes('generateContent') && m.name.includes('gemini'))
+        .map(m => {
+          const id = m.name.replace('models/', '');
+          return { id, name: m.displayName || id };
+        });
+    } catch (e) {
+      console.warn('Gemini models error:', e);
+      return this.defaultModels;
+    }
   }
 
   async *chat(modelId, messages, signal) {
