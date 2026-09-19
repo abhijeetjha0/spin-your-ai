@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Spin Your AI - Settings</title>
+  <link rel="stylesheet" href="options.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar glassmorphism">
+      <div class="logo">
+        <img src="../icons/icon-48.png" alt="Logo">
+        <h2>Settings</h2>
+      </div>
+      <nav class="nav-links">
+        <a href="#local" class="active">Local Agents & Models</a>
+        <a href="#cloud">Cloud APIs</a>
+        <a href="#aggregators">Aggregators</a>
+        <a href="#dev">Dev Platforms</a>
+        <a href="#mcp">MCP Servers</a>
+      </nav>
+    </aside>
+
+    <main class="content">
+      <header class="content-header">
+        <h1>Provider Configuration</h1>
+        <p class="subtitle">🔒 All keys are stored securely in your browser's local storage.</p>
+      </header>
+
+      <div class="toast-container" id="toast-container"></div>
+
+      <!-- We will inject the provider cards here via JS -->
+      <div id="provider-cards-container"></div>
+    </main>
+  </div>
+  <script type="module" src="options.js"></script>
+</body>
+</html>

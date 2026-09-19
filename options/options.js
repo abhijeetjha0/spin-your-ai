@@ -1,0 +1,216 @@
+import { vault } from '../background/vault.js';
+
+const PROVIDERS = [
+  {
+    category: 'Local Agents & Models',
+    categoryId: 'local',
+    providers: [
+      { id: 'ollama', name: 'Ollama (Local)', fields: [{ key: 'url', label: 'Host URL', type: 'text', default: 'http://localhost:11434' }] },
+      { id: 'openclaw', name: 'OpenClaw', fields: [{ key: 'url', label: 'Host URL', type: 'text', default: 'http://localhost:3141' }] },
+      { id: 'hermes', name: 'Hermes Desktop', fields: [{ key: 'url', label: 'Host URL', type: 'text', default: 'http://127.0.0.1:11434/v1' }] },
+    ]
+  },
+  {
+    category: 'Cloud APIs',
+    categoryId: 'cloud',
+    providers: [
+      { id: 'openai', name: 'OpenAI', fields: [{ key: 'apiKey', label: 'API Key', type: 'password' }] },
+      { id: 'anthropic', name: 'Anthropic', fields: [{ key: 'apiKey', label: 'API Key', type: 'password' }] },
+      { id: 'gemini', name: 'Google Gemini', fields: [{ key: 'apiKey', label: 'API Key', type: 'password' }] },
+      { id: 'ollama_cloud', name: 'Ollama Cloud', fields: [{ key: 'apiKey', label: 'API Key', type: 'password' }] },
+    ]
+  },
+  {
+    category: 'Aggregators',
+    categoryId: 'aggregators',
+    providers: [
+      { id: 'openrouter', name: 'OpenRouter', fields: [{ key: 'apiKey', label: 'API Key', type: 'password' }] },
+      { id: 'opencode_zen', name: 'OpenCode Zen', fields: [{ key: 'apiKey', label: 'API Key', type: 'password' }] },
+    ]
+  },
+  {
+    category: 'Dev Platforms',
+    categoryId: 'dev',
+    providers: [
+      { id: 'opencode', name: 'OpenCode', fields: [
+        { key: 'url', label: 'Server URL', type: 'text', default: 'http://localhost:3000' },
+        { key: 'apiKey', label: 'API Key (Optional)', type: 'password' }
+      ]}
+    ]
+  },
+  {
+    category: 'MCP Servers',
+    categoryId: 'mcp',
+    providers: [
+      { id: 'mcp', name: 'MCP Server', fields: [
+        { key: 'url', label: 'Server URL', type: 'text' },
+        { key: 'authType', label: 'Auth Type', type: 'select', options: ['None', 'Bearer', 'API Key', 'Basic'] },
+        { key: 'authToken', label: 'Token / Key', type: 'password' }
+      ]}
+    ]
+  }
+];
+
+const container = document.getElementById('provider-cards-container');
+
+async function renderCards() {
+  const allConfigs = await vault.getAllConfigs();
+  let html = '<div class="content-inner">';
+
+  for (const group of PROVIDERS) {
+    html += `<div class="category-section" id="${group.categoryId}">
+      <h3>${group.category}</h3>`;
+    
+    for (const p of group.providers) {
+      const config = allConfigs[p.id] || {};
+      const isActive = !!(config.apiKey || config.url);
+      
+      html += `
+        <div class="provider-card" id="card-${p.id}">
+          <div class="provider-header">
+            <div class="provider-name">${p.name} <span class="provider-status ${isActive ? 'active' : ''}">${isActive ? 'Configured' : 'Not Configured'}</span></div>
+          </div>
+          <form id="form-${p.id}">
+      `;
+
+      for (const field of p.fields) {
+        let value = config[field.key] || field.default || '';
+        
+        html += `<div class="form-group">
+          <label>${field.label}</label>
+          <div class="input-row">`;
+          
+        if (field.type === 'select') {
+          html += `<select name="${field.key}">`;
+          field.options.forEach(opt => {
+            html += `<option value="${opt}" ${value === opt ? 'selected' : ''}>${opt}</option>`;
+          });
+          html += `</select>`;
+        } else {
+          // If it's a password and we have a value, mask it visually, but store real value in dataset
+          const isMasked = field.type === 'password' && value;
+          const displayValue = isMasked ? '••••••••' + value.slice(-4) : value;
+          
+          html += `<input type="${field.type === 'password' && !isMasked ? 'text' : field.type}" 
+                   name="${field.key}" 
+                   value="${displayValue}" 
+                   data-real-value="${value}"
+                   ${isMasked ? 'readonly' : ''}
+                   placeholder="${field.type === 'password' ? 'sk-...' : 'http://...'}">`;
+                   
+          if (field.type === 'password') {
+            html += `<button type="button" class="icon-btn reveal-btn" title="Edit/Reveal">✏️</button>`;
+          }
+        }
+        
+        html += `</div></div>`;
+      }
+
+      html += `
+            <div class="actions">
+              <button type="button" class="btn btn-danger delete-btn" data-id="${p.id}">Delete</button>
+              <button type="button" class="btn btn-secondary test-btn" data-id="${p.id}">Test Connection</button>
+              <button type="submit" class="btn btn-primary" data-id="${p.id}">Save</button>
+            </div>
+          </form>
+        </div>
+      `;
+    }
+    html += `</div>`;
+  }
+  
+  html += '</div>';
+  container.innerHTML = html;
+  attachEvents();
+}
+
+function attachEvents() {
+  // Navigation
+  document.querySelectorAll('.nav-links a').forEach(link => {
+    link.addEventListener('click', (e) => {
+      document.querySelectorAll('.nav-links a').forEach(a => a.classList.remove('active'));
+      e.target.classList.add('active');
+    });
+  });
+
+  // Reveal buttons
+  document.querySelectorAll('.reveal-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const input = e.target.previousElementSibling;
+      input.readOnly = false;
+      input.type = 'text';
+      input.value = input.dataset.realValue || '';
+      input.focus();
+    });
+  });
+
+  // Save forms
+  document.querySelectorAll('form').forEach(form => {
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const id = e.submitter.dataset.id;
+      const formData = new FormData(form);
+      const config = {};
+      
+      for (let [key, value] of formData.entries()) {
+        // If it's a masked password that wasn't edited, grab real value
+        const input = form.querySelector(`[name="${key}"]`);
+        if (input.readOnly && input.dataset.realValue) {
+          config[key] = input.dataset.realValue;
+        } else {
+          config[key] = value.trim();
+        }
+      }
+      
+      await vault.saveConfig(id, config);
+      showToast(`Saved ${id} configuration`, 'success');
+      
+      // Notify background script to refresh models
+      chrome.runtime.sendMessage({ type: 'PROVIDERS_UPDATED' });
+      
+      renderCards(); // Re-render to show masked state and active badge
+    });
+  });
+
+  // Delete buttons
+  document.querySelectorAll('.delete-btn').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      if (confirm('Delete this configuration?')) {
+        const id = e.target.dataset.id;
+        await vault.deleteConfig(id);
+        showToast(`Deleted ${id}`, 'success');
+        chrome.runtime.sendMessage({ type: 'PROVIDERS_UPDATED' });
+        renderCards();
+      }
+    });
+  });
+
+  // Test buttons
+  document.querySelectorAll('.test-btn').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      const id = e.target.dataset.id;
+      showToast(`Testing ${id}...`, 'info');
+      // In a real implementation we would call a specific test function on the background script
+      // For now we'll simulate the interface
+      const res = await chrome.runtime.sendMessage({ type: 'TEST_CONNECTION', payload: { providerId: id }});
+      if (res && res.ok) {
+        showToast(`✅ Connection successful`, 'success');
+      } else {
+        showToast(`❌ Failed: ${res?.error || 'Unknown error'}`, 'error');
+      }
+    });
+  });
+}
+
+function showToast(msg, type) {
+  const t = document.createElement('div');
+  t.className = `toast ${type}`;
+  t.textContent = msg;
+  document.getElementById('toast-container').appendChild(t);
+  setTimeout(() => {
+    t.style.opacity = '0';
+    setTimeout(() => t.remove(), 300);
+  }, 3000);
+}
+
+document.addEventListener('DOMContentLoaded', renderCards);
