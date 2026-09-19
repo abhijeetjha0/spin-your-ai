@@ -35,6 +35,11 @@ async function init() {
     chrome.runtime.openOptionsPage();
   });
 
+  const helpBtn = document.getElementById('help-btn');
+  helpBtn.addEventListener('click', () => {
+    chrome.tabs.create({ url: chrome.runtime.getURL('help/index.html') });
+  });
+
   newChatBtn.addEventListener('click', clearChat);
 
   chatInput.addEventListener('keydown', (e) => {
@@ -253,7 +258,40 @@ async function sendMessage() {
   // Create empty AI message container
   currentMessageId = Date.now().toString();
   const aiMsgEl = appendMessage('AI', '', 'ai-msg', currentMessageId);
-  aiMsgEl.innerHTML = '<span class="typing-indicator">Thinking...</span>';
+  aiMsgEl.innerHTML = '<span class="typing-indicator">Establishing uplink...</span>';
+
+  const THINKING_PHRASES = [
+    "Bypassing mainframe...",
+    "Decrypting neural pathways...",
+    "Synthesizing data...",
+    "Analyzing context...",
+    "Compiling token stream...",
+    "Querying local agents...",
+    "Reticulating splines...",
+    "Injecting prompt variables...",
+    "Breaching firewall...",
+    "Parsing quantum states...",
+    "Routing via proxy node...",
+    "Calculating inference vectors...",
+    "Accessing knowledge graph...",
+    "Simulating edge cases...",
+    "Initializing cognitive core...",
+    "Loading LLM weights...",
+    "Ping-sweeping latent space...",
+    "Optimizing heuristics...",
+    "Compiling tensor operations...",
+    "Synchronizing data hashes..."
+  ];
+
+  if (window.thinkingInterval) clearInterval(window.thinkingInterval);
+  window.thinkingInterval = setInterval(() => {
+    const indicator = aiMsgEl.querySelector('.typing-indicator');
+    if (indicator) {
+      indicator.textContent = THINKING_PHRASES[Math.floor(Math.random() * THINKING_PHRASES.length)];
+    } else {
+      clearInterval(window.thinkingInterval);
+    }
+  }, 500);
 
   isGenerating = true;
   sendBtn.classList.add('hidden');
@@ -299,7 +337,11 @@ function handleStreamChunk(chunk, done, error) {
   }
 
   if (chunk) {
-    // If it was just "Thinking...", clear it out
+    if (window.thinkingInterval) {
+      clearInterval(window.thinkingInterval);
+      window.thinkingInterval = null;
+    }
+    // If it was just the typing indicator, clear it out
     if (currentAiText === '') {
         msgEl.innerHTML = '';
     }
@@ -314,6 +356,10 @@ function handleStreamChunk(chunk, done, error) {
 }
 
 function finishGeneration() {
+  if (window.thinkingInterval) {
+    clearInterval(window.thinkingInterval);
+    window.thinkingInterval = null;
+  }
   isGenerating = false;
   currentMessageId = null;
   currentAiText = '';

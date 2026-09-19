@@ -4,32 +4,28 @@
   <meta charset="UTF-8">
   <title>Spin Your AI</title>
   <link rel="stylesheet" href="sidepanel.css">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet">
 </head>
 <body>
   <div class="app-container">
     <header class="header glassmorphism">
-      <div class="logo">
-        <img src="../icons/icon-48.png" alt="Logo" class="logo-icon">
-        <span class="logo-text">Spin Your AI</span>
+      <div class="model-combobox" id="model-combobox">
+        <div class="model-combobox-trigger" id="model-trigger">
+          <span class="material-symbols-outlined combobox-icon">smart_toy</span>
+          <span id="model-display-name">Select Model...</span>
+          <span class="material-symbols-outlined combobox-chevron">expand_more</span>
+        </div>
+        <div class="model-combobox-dropdown hidden" id="model-dropdown">
+          <div class="model-search-wrapper">
+            <span class="material-symbols-outlined">search</span>
+            <input type="text" id="model-search" placeholder="Search models..." autocomplete="off">
+          </div>
+          <div id="model-list" class="model-list"></div>
+        </div>
       </div>
       <div class="header-actions">
-        <div class="model-combobox" id="model-combobox">
-          <div class="model-combobox-trigger" id="model-trigger">
-            <span class="material-symbols-outlined combobox-icon">smart_toy</span>
-            <span id="model-display-name">Select Model...</span>
-            <span class="material-symbols-outlined combobox-chevron">expand_more</span>
-          </div>
-          <div class="model-combobox-dropdown hidden" id="model-dropdown">
-            <div class="model-search-wrapper">
-              <span class="material-symbols-outlined">search</span>
-              <input type="text" id="model-search" placeholder="Search models..." autocomplete="off">
-            </div>
-            <div id="model-list" class="model-list"></div>
-          </div>
-        </div>
         <button id="new-chat-btn" class="icon-btn" title="New Chat"><span class="material-symbols-outlined">delete</span></button>
+        <button id="help-btn" class="icon-btn" title="Help"><span class="material-symbols-outlined">help</span></button>
         <button id="options-btn" class="icon-btn" title="Settings"><span class="material-symbols-outlined">settings</span></button>
       </div>
     </header>

@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Spin Your AI - Help</title>
+  <!-- Reuse the existing terminal theme styles from the options page -->
+  <link rel="stylesheet" href="../options/index.css">
+  <link rel="stylesheet" href="index.css">
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet">
+</head>
+<body>
+  <div class="content">
+    <header class="header">
+      <div class="logo">
+        <span class="material-symbols-outlined logo-icon">terminal</span>
+        <h1>Spin Your AI : Help Center</h1>
+      </div>
+    </header>
+
+    <main class="help-content">
+      <section class="help-section">
+        <h2>1. Getting Started</h2>
+        <p>Spin Your AI allows you to connect to multiple AI models simultaneously. To start chatting:</p>
+        <ul>
+          <li>Open the <strong>Settings</strong> page by clicking the gear icon in the sidebar.</li>
+          <li>Enter your API Keys for the providers you wish to use (e.g., OpenAI, Anthropic).</li>
+          <li>For local providers like OpenCode or Ollama, ensure your local server is running and the Host URL is correct.</li>
+        </ul>
+      </section>
+
+      <section class="help-section">
+        <h2>2. Using the Side Panel</h2>
+        <p>The main chat interface lives directly inside your browser's side panel.</p>
+        <ul>
+          <li><strong>Select a Model:</strong> Click the model dropdown at the top of the chat panel to switch between available AIs.</li>
+          <li><strong>Include Page Context:</strong> Toggle the "Include page content" switch to let the AI read the webpage you are currently viewing.</li>
+          <li><strong>Attachments:</strong> Click the paperclip icon to upload images, documents, or code files to send to multimodal models.</li>
+          <li><strong>Clear Chat:</strong> Click the trash icon at the top to reset the conversation history.</li>
+        </ul>
+      </section>
+
+      <section class="help-section">
+        <h2>3. Data Privacy & Security</h2>
+        <p>Your data stays with you. Spin Your AI is designed as a secure, local-first extension.</p>
+        <ul>
+          <li>All API keys and credentials are encrypted and stored entirely in your browser's local storage (`chrome.storage.local`).</li>
+          <li>Your keys are <strong>never</strong> synced to external cloud services or third-party servers.</li>
+        </ul>
+      </section>
+      
+      <section class="help-section">
+        <h2>4. Troubleshooting</h2>
+        <p>If you encounter issues connecting to a provider:</p>
+        <ul>
+          <li>Ensure you have sufficient API credits on your provider's dashboard.</li>
+          <li>Use the "Test" button on the Settings page to verify your credentials.</li>
+          <li>If using local MCP Servers, verify that the server URL is reachable.</li>
+        </ul>
+      </section>
+    </main>
+  </div>
+</body>
+</html>

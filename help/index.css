@@ -1,0 +1,42 @@
+.help-content {
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.help-section {
+  background: var(--panel-bg);
+  border: 1px solid var(--border-color);
+  padding: 20px 24px;
+  margin-bottom: 24px;
+}
+
+.help-section h2 {
+  font-size: 18px;
+  margin-bottom: 12px;
+  color: var(--text-main);
+  border-bottom: 1px dashed var(--border-color);
+  padding-bottom: 8px;
+}
+
+.help-section p {
+  font-size: 14px;
+  line-height: 1.6;
+  margin-bottom: 12px;
+  color: var(--text-muted);
+}
+
+.help-section ul {
+  list-style-type: square;
+  padding-left: 20px;
+}
+
+.help-section li {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+
+.help-section li strong {
+  color: var(--text-main);
+}

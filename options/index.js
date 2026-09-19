@@ -32,22 +32,26 @@ const PROVIDERS = [
     category: 'Dev Platforms',
     categoryId: 'dev',
     providers: [
-      { id: 'opencode', name: 'OpenCode', fields: [
-        { key: 'url', label: 'Host URL', type: 'text', default: 'http://localhost:3000' },
-        { key: 'username', label: 'Username', type: 'text' },
-        { key: 'password', label: 'Password', type: 'password' }
-      ]}
+      {
+        id: 'opencode', name: 'OpenCode', fields: [
+          { key: 'url', label: 'Host URL', type: 'text', default: 'http://localhost:3000' },
+          { key: 'username', label: 'Username', type: 'text', placeholder: 'Enter username...' },
+          { key: 'password', label: 'Password', type: 'password' }
+        ]
+      }
     ]
   },
   {
     category: 'MCP Servers',
     categoryId: 'mcp',
     providers: [
-      { id: 'mcp', name: 'MCP Server', fields: [
-        { key: 'url', label: 'Server URL', type: 'text' },
-        { key: 'authType', label: 'Auth Type', type: 'select', options: ['None', 'Bearer', 'API Key', 'Basic'] },
-        { key: 'authToken', label: 'Token / Key', type: 'password' }
-      ]}
+      {
+        id: 'mcp', name: 'MCP Server', fields: [
+          { key: 'url', label: 'Server URL', type: 'text' },
+          { key: 'authType', label: 'Auth Type', type: 'select', options: ['None', 'Bearer', 'API Key', 'Basic'] },
+          { key: 'authToken', label: 'Token / Key', type: 'password' }
+        ]
+      }
     ]
   }
 ];
@@ -61,11 +65,11 @@ async function renderCards() {
   for (const group of PROVIDERS) {
     html += `<div class="category-section" id="${group.categoryId}">
       <h3>${group.category}</h3>`;
-    
+
     for (const p of group.providers) {
       const config = allConfigs[p.id] || {};
       const isActive = !!(config.apiKey || config.url);
-      
+
       html += `
         <div class="provider-card" id="card-${p.id}">
           <div class="provider-header">
@@ -76,11 +80,11 @@ async function renderCards() {
 
       for (const field of p.fields) {
         let value = config[field.key] || field.default || '';
-        
+
         html += `<div class="form-group">
           <label>${field.label}</label>
           <div class="input-row">`;
-          
+
         if (field.type === 'select') {
           html += `<select name="${field.key}">`;
           field.options.forEach(opt => {
@@ -102,16 +106,16 @@ async function renderCards() {
             html += `<input type="${field.type}" 
                      name="${field.key}" 
                      value="${value}" 
-                     placeholder="${field.default || 'http://...'}">`;
+                     placeholder="${field.placeholder || field.default || (field.key === 'url' ? 'http://...' : 'Enter value...')}">`;
           }
         }
-        
+
         html += `</div></div>`;
       }
 
       html += `
             <div class="actions">
-              <button type="button" class="btn btn-danger delete-btn" data-id="${p.id}">Delete</button>
+              <button type="button" class="btn btn-danger delete-btn" data-id="${p.id}">Reset</button>
               <button type="button" class="btn btn-secondary test-btn" data-id="${p.id}">Test Connection</button>
               <button type="submit" class="btn btn-primary" data-id="${p.id}">Save</button>
             </div>
@@ -121,21 +125,13 @@ async function renderCards() {
     }
     html += `</div>`;
   }
-  
+
   html += '</div>';
   container.innerHTML = html;
   attachEvents();
 }
 
 function attachEvents() {
-  // Navigation
-  document.querySelectorAll('.nav-links a').forEach(link => {
-    link.addEventListener('click', (e) => {
-      document.querySelectorAll('.nav-links a').forEach(a => a.classList.remove('active'));
-      e.target.classList.add('active');
-    });
-  });
-
   // Edit buttons - unlock the field for editing but keep it masked
   document.querySelectorAll('.reveal-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
@@ -174,7 +170,7 @@ function attachEvents() {
       const id = e.submitter.dataset.id;
       const formData = new FormData(form);
       const config = {};
-      
+
       for (let [key, value] of formData.entries()) {
         // If it's a masked password that wasn't edited, grab real value
         const input = form.querySelector(`[name="${key}"]`);
@@ -184,24 +180,24 @@ function attachEvents() {
           config[key] = value.trim();
         }
       }
-      
+
       await vault.saveConfig(id, config);
-      showToast(`Saved ${id} configuration`, 'success');
-      
+      showToast(`Saved ${getProviderName(id)} configuration`, 'success');
+
       // Notify background script to refresh models
       chrome.runtime.sendMessage({ type: 'PROVIDERS_UPDATED' });
-      
+
       renderCards(); // Re-render to show masked state and active badge
     });
   });
 
-  // Delete buttons
+  // Reset buttons
   document.querySelectorAll('.delete-btn').forEach(btn => {
     btn.addEventListener('click', async (e) => {
-      if (confirm('Delete this configuration?')) {
+      if (confirm('Reset this configuration?')) {
         const id = e.target.dataset.id;
         await vault.deleteConfig(id);
-        showToast(`Deleted ${id}`, 'success');
+        showToast(`Reset ${getProviderName(id)}`, 'success');
         chrome.runtime.sendMessage({ type: 'PROVIDERS_UPDATED' });
         renderCards();
       }
@@ -213,10 +209,10 @@ function attachEvents() {
     btn.addEventListener('click', async (e) => {
       const id = e.target.dataset.id;
       const form = document.getElementById(`form-${id}`);
-      
+
       const formData = new FormData(form);
       const config = {};
-      
+
       for (let [key, value] of formData.entries()) {
         const input = form.querySelector(`[name="${key}"]`);
         if (input.readOnly && input.dataset.realValue) {
@@ -226,9 +222,9 @@ function attachEvents() {
         }
       }
 
-      showToast(`Testing ${id}...`, 'info');
-      const res = await chrome.runtime.sendMessage({ 
-        type: 'TEST_CONNECTION', 
+      showToast(`Testing ${getProviderName(id)}...`, 'info');
+      const res = await chrome.runtime.sendMessage({
+        type: 'TEST_CONNECTION',
         payload: { providerId: id, config }
       });
       if (res && res.ok) {
@@ -240,14 +236,29 @@ function attachEvents() {
   });
 }
 
+function getProviderName(id) {
+  for (const cat of PROVIDERS) {
+    const provider = cat.providers.find(p => p.id === id);
+    if (provider) return provider.name;
+  }
+  return id;
+}
+
 function showToast(msg, type) {
+  const container = document.getElementById('toast-container');
+  // Clear any existing toasts so they don't stack
+  container.innerHTML = '';
+
   const t = document.createElement('div');
   t.className = `toast ${type}`;
   t.textContent = msg;
-  document.getElementById('toast-container').appendChild(t);
+  container.appendChild(t);
+
   setTimeout(() => {
     t.style.opacity = '0';
-    setTimeout(() => t.remove(), 300);
+    setTimeout(() => {
+      if (t.parentElement) t.remove();
+    }, 300);
   }, 3000);
 }
 
