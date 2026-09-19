@@ -27,10 +27,24 @@ export class AnthropicProvider extends BaseProvider {
     const systemMessage = messages.find(m => m.role === 'system')?.content || '';
     const chatMessages = messages.filter(m => m.role !== 'system');
 
-    const formattedMessages = chatMessages.map(m => ({
-      role: m.role === 'user' ? 'user' : 'assistant',
-      content: m.content
-    }));
+    const formattedMessages = chatMessages.map(m => {
+      const role = m.role === 'user' ? 'user' : 'assistant';
+      
+      if (Array.isArray(m.content)) {
+        return {
+          role,
+          content: m.content.map(part => {
+            if (part.type === 'text') return { type: 'text', text: part.text };
+            if (part.type === 'image') {
+              return { type: 'image', source: { type: 'base64', media_type: part.mimeType, data: part.data } };
+            }
+            return { type: 'text', text: `[Attached file: ${part.name} (${part.mimeType})]` };
+          })
+        };
+      }
+      
+      return { role, content: m.content };
+    });
 
     const res = await fetch(`${this.baseUrl}/messages`, {
       method: 'POST',

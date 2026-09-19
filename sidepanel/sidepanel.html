@@ -15,9 +15,20 @@
         <span class="logo-text">Spin Your AI</span>
       </div>
       <div class="header-actions">
-        <select id="model-selector" class="model-dropdown">
-          <option value="" disabled selected>Select Model...</option>
-        </select>
+        <div class="model-combobox" id="model-combobox">
+          <div class="model-combobox-trigger" id="model-trigger">
+            <span class="material-symbols-outlined combobox-icon">smart_toy</span>
+            <span id="model-display-name">Select Model...</span>
+            <span class="material-symbols-outlined combobox-chevron">expand_more</span>
+          </div>
+          <div class="model-combobox-dropdown hidden" id="model-dropdown">
+            <div class="model-search-wrapper">
+              <span class="material-symbols-outlined">search</span>
+              <input type="text" id="model-search" placeholder="Search models..." autocomplete="off">
+            </div>
+            <div id="model-list" class="model-list"></div>
+          </div>
+        </div>
         <button id="new-chat-btn" class="icon-btn" title="New Chat"><span class="material-symbols-outlined">delete</span></button>
         <button id="options-btn" class="icon-btn" title="Settings"><span class="material-symbols-outlined">settings</span></button>
       </div>
@@ -37,7 +48,12 @@
           <span class="pill-text"><span class="material-symbols-outlined" style="font-size:16px;vertical-align:middle">description</span> Include page content</span>
         </label>
       </div>
+      <div id="attachment-preview" class="attachment-preview hidden"></div>
       <div class="input-wrapper">
+        <button id="attach-btn" class="icon-btn" title="Attach file">
+          <span class="material-symbols-outlined">attach_file</span>
+        </button>
+        <input type="file" id="file-input" class="hidden" multiple accept="image/*,audio/*,video/*,.pdf,.html,.htm,.css,.js,.ts,.json,.xml,.csv,.txt,.md,.py,.java,.c,.cpp,.go,.rs,.rb,.sh">
         <textarea id="chat-input" placeholder="Ask anything..." rows="1"></textarea>
         <button id="send-btn" class="send-btn">
           <span class="material-symbols-outlined">send</span>

@@ -132,7 +132,7 @@ async function handleGetModels() {
 }
 
 async function handleSendChat(payload) {
-  const { messageId, providerId, modelId, text, pageContext } = payload;
+  const { messageId, providerId, modelId, text, pageContext, attachments } = payload;
   const provider = await getProviderInstance(providerId);
   if (!provider) {
     emitStreamChunk(messageId, null, true, 'Provider not configured.');
@@ -156,10 +156,29 @@ async function handleSendChat(payload) {
   // Append full conversation history for multi-turn context
   messages.push(...conversationHistory);
   
-  // Add the new user message
-  messages.push({ role: 'user', content: text });
+  // Build the new user message with attachments
+  const userMessage = { role: 'user' };
   
-  // Track the user message in history
+  if (attachments && attachments.length > 0) {
+    // Multimodal content: array of parts
+    const parts = [];
+    for (const att of attachments) {
+      parts.push({
+        type: att.type.startsWith('image/') ? 'image' : 'file',
+        mimeType: att.type,
+        data: att.data,
+        name: att.name
+      });
+    }
+    parts.push({ type: 'text', text });
+    userMessage.content = parts;
+  } else {
+    userMessage.content = text;
+  }
+  
+  messages.push(userMessage);
+  
+  // Track the user message in history (text only for history)
   conversationHistory.push({ role: 'user', content: text });
 
   let fullResponse = '';

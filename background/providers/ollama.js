@@ -21,12 +21,24 @@ export class OllamaProvider extends BaseProvider {
   async *chat(modelId, messages, signal) {
     let res;
     try {
+      // Convert multimodal content to Ollama format
+      const formattedMessages = messages.map(m => {
+        if (Array.isArray(m.content)) {
+          const textParts = m.content.filter(p => p.type === 'text').map(p => p.text);
+          const images = m.content.filter(p => p.type === 'image').map(p => p.data);
+          const msg = { role: m.role, content: textParts.join('\n') };
+          if (images.length > 0) msg.images = images;
+          return msg;
+        }
+        return m;
+      });
+
       res = await fetch(`${this.baseUrl}/api/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           model: modelId,
-          messages: messages,
+          messages: formattedMessages,
           stream: true
         }),
         signal

@@ -1,72 +1,133 @@
 /**
- * A simple regex-based markdown to HTML renderer for chat messages.
+ * A complete markdown to HTML renderer for chat messages.
+ * Supports: headings, bold, italic, strikethrough, code blocks, inline code,
+ * ordered/unordered lists, blockquotes, tables, horizontal rules, and links.
  */
 export function renderMarkdown(text) {
   if (!text) return '';
 
-  let html = text
-    // Escape HTML to prevent XSS
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
-
-  // Code blocks (triple backticks)
-  html = html.replace(/```(\w+)?\n([\s\S]*?)```/g, function(match, lang, code) {
-    return `<pre><code class="language-${lang || 'plaintext'}">${code}</code></pre>`;
+  // --- Step 1: Extract and protect code blocks from further processing ---
+  const codeBlocks = [];
+  text = text.replace(/```(\w*)\n?([\s\S]*?)```/g, (match, lang, code) => {
+    const escaped = code
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+    const idx = codeBlocks.length;
+    codeBlocks.push(`<pre><code class="language-${lang || 'plaintext'}">${escaped}</code></pre>`);
+    return `\x00CODE${idx}\x00`;
   });
 
-  // Inline code (single backtick)
-  html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+  // --- Step 2: Escape HTML in remaining text ---
+  text = text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
 
-  // Bold (**text**)
-  html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  // --- Step 3: Inline code (single backtick) ---
+  text = text.replace(/`([^`]+)`/g, '<code>$1</code>');
 
-  // Italic (*text*)
-  html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+  // --- Step 4: Block-level processing line by line ---
+  const lines = text.split('\n');
+  const output = [];
+  let i = 0;
 
-  // Links ([text](url))
-  html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
-  
-  // Lists (- item)
-  let inList = false;
-  const lines = html.split('\n');
-  const processedLines = lines.map(line => {
-    if (line.trim().startsWith('- ')) {
-      const content = line.trim().substring(2);
-      if (!inList) {
-        inList = true;
-        return `<ul><li>${content}</li>`;
-      }
-      return `<li>${content}</li>`;
-    } else {
-      if (inList) {
-        inList = false;
-        return `</ul>\n${line}`;
-      }
-      return line;
+  while (i < lines.length) {
+    const line = lines[i];
+
+    // Horizontal rule
+    if (/^(\*\*\*|---|___)$/.test(line.trim())) {
+      output.push('<hr>');
+      i++; continue;
     }
-  });
-  
-  if (inList) {
-    processedLines.push('</ul>');
-  }
 
-  html = processedLines.join('\n');
+    // Headings
+    const headingMatch = line.match(/^(#{1,6})\s+(.+)/);
+    if (headingMatch) {
+      const level = headingMatch[1].length;
+      output.push(`<h${level}>${processInline(headingMatch[2])}</h${level}>`);
+      i++; continue;
+    }
 
-  // Paragraphs / Newlines - avoid breaking HTML tags like <pre> or <ul>
-  // A naive replace could break multiline <pre>. Let's keep it simple for now, 
-  // but protect <pre> blocks if needed. We'll just replace \n with <br/> for standard lines.
-  // Actually, replacing \n with <br/> is safer after code blocks, but code blocks 
-  // might already have \n which shouldn't be <br/>. Let's fix that.
-  
-  // A slightly safer way:
-  let parts = html.split(/(<pre>[\s\S]*?<\/pre>)/g);
-  for (let i = 0; i < parts.length; i++) {
-      if (!parts[i].startsWith('<pre>')) {
-          parts[i] = parts[i].replace(/\n\n/g, '<br/><br/>').replace(/\n/g, '<br/>');
+    // Blockquote
+    if (line.startsWith('&gt;')) {
+      const quoteLines = [];
+      while (i < lines.length && lines[i].startsWith('&gt;')) {
+        quoteLines.push(lines[i].slice(4).trim());
+        i++;
       }
+      output.push(`<blockquote>${processInline(quoteLines.join('\n'))}</blockquote>`);
+      continue;
+    }
+
+    // Table (detect | ... | ... |)
+    if (/^\|.+\|/.test(line) && i + 1 < lines.length && /^\|[-: |]+\|$/.test(lines[i + 1])) {
+      const headers = line.split('|').slice(1, -1).map(h => `<th>${processInline(h.trim())}</th>`).join('');
+      i += 2; // skip header and separator
+      const rows = [];
+      while (i < lines.length && /^\|.+\|/.test(lines[i])) {
+        const cells = lines[i].split('|').slice(1, -1).map(c => `<td>${processInline(c.trim())}</td>`).join('');
+        rows.push(`<tr>${cells}</tr>`);
+        i++;
+      }
+      output.push(`<table><thead><tr>${headers}</tr></thead><tbody>${rows.join('')}</tbody></table>`);
+      continue;
+    }
+
+    // Unordered list
+    if (/^[-*+]\s/.test(line)) {
+      const listItems = [];
+      while (i < lines.length && /^[-*+]\s/.test(lines[i])) {
+        listItems.push(`<li>${processInline(lines[i].replace(/^[-*+]\s/, ''))}</li>`);
+        i++;
+      }
+      output.push(`<ul>${listItems.join('')}</ul>`);
+      continue;
+    }
+
+    // Ordered list
+    if (/^\d+\.\s/.test(line)) {
+      const listItems = [];
+      while (i < lines.length && /^\d+\.\s/.test(lines[i])) {
+        listItems.push(`<li>${processInline(lines[i].replace(/^\d+\.\s/, ''))}</li>`);
+        i++;
+      }
+      output.push(`<ol>${listItems.join('')}</ol>`);
+      continue;
+    }
+
+    // Empty line = paragraph break
+    if (line.trim() === '') {
+      output.push('<br>');
+      i++; continue;
+    }
+
+    // Regular paragraph line
+    output.push(`<p>${processInline(line)}</p>`);
+    i++;
   }
-  return parts.join('');
+
+  let html = output.join('');
+
+  // --- Step 5: Restore protected code blocks ---
+  html = html.replace(/\x00CODE(\d+)\x00/g, (_, idx) => codeBlocks[idx]);
+
+  return html;
+}
+
+function processInline(text) {
+  // Bold + Italic (***text***)
+  text = text.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>');
+  // Bold (**text**)
+  text = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  // Italic (*text* or _text_)
+  text = text.replace(/\*(.+?)\*/g, '<em>$1</em>');
+  text = text.replace(/_(.+?)_/g, '<em>$1</em>');
+  // Strikethrough (~~text~~)
+  text = text.replace(/~~(.+?)~~/g, '<s>$1</s>');
+  // Inline code
+  text = text.replace(/`([^`]+)`/g, '<code>$1</code>');
+  // Links [text](url)
+  text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+  return text;
 }

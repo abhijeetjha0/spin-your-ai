@@ -29,6 +29,24 @@ export class OpenAIProvider extends BaseProvider {
   async *chat(modelId, messages, signal) {
     if (!this.apiKey) throw new Error('OpenAI API Key is not configured.');
 
+    // Convert multimodal content to OpenAI format
+    const formattedMessages = messages.map(m => {
+      if (Array.isArray(m.content)) {
+        return {
+          role: m.role,
+          content: m.content.map(part => {
+            if (part.type === 'text') return { type: 'text', text: part.text };
+            if (part.type === 'image') {
+              return { type: 'image_url', image_url: { url: `data:${part.mimeType};base64,${part.data}` } };
+            }
+            // For non-image files, send as text description
+            return { type: 'text', text: `[Attached file: ${part.name} (${part.mimeType})]` };
+          })
+        };
+      }
+      return m;
+    });
+
     const res = await fetch(`${this.baseUrl}/chat/completions`, {
       method: 'POST',
       headers: {
@@ -37,7 +55,7 @@ export class OpenAIProvider extends BaseProvider {
       },
       body: JSON.stringify({
         model: modelId,
-        messages: messages,
+        messages: formattedMessages,
         stream: true
       }),
       signal

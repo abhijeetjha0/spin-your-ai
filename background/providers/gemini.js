@@ -35,11 +35,23 @@ export class GeminiProvider extends BaseProvider {
   async *chat(modelId, messages, signal) {
     if (!this.apiKey) throw new Error('Gemini API Key is not configured.');
 
-    // Convert standard OpenAI format to Gemini format
-    const contents = messages.filter(m => m.role !== 'system').map(m => ({
-      role: m.role === 'user' ? 'user' : 'model',
-      parts: [{ text: m.content }]
-    }));
+    // Convert standard format to Gemini format
+    const contents = messages.filter(m => m.role !== 'system').map(m => {
+      const role = m.role === 'user' ? 'user' : 'model';
+      let parts;
+      
+      if (Array.isArray(m.content)) {
+        parts = m.content.map(part => {
+          if (part.type === 'text') return { text: part.text };
+          // Gemini supports inline_data for images, audio, video, PDFs
+          return { inline_data: { mime_type: part.mimeType, data: part.data } };
+        });
+      } else {
+        parts = [{ text: m.content }];
+      }
+      
+      return { role, parts };
+    });
     
     const systemInstruction = messages.find(m => m.role === 'system')?.content;
     const body = { contents };

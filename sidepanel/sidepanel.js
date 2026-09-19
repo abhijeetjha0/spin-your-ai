@@ -4,13 +4,28 @@ const chatContainer = document.getElementById('chat-container');
 const chatInput = document.getElementById('chat-input');
 const sendBtn = document.getElementById('send-btn');
 const stopBtn = document.getElementById('stop-btn');
-const modelSelector = document.getElementById('model-selector');
 const optionsBtn = document.getElementById('options-btn');
 const newChatBtn = document.getElementById('new-chat-btn');
 const contextToggle = document.getElementById('include-page-context');
+const attachBtn = document.getElementById('attach-btn');
+const fileInput = document.getElementById('file-input');
+const attachmentPreview = document.getElementById('attachment-preview');
+
+// Combobox elements
+const modelCombobox = document.getElementById('model-combobox');
+const modelTrigger = document.getElementById('model-trigger');
+const modelDropdown = document.getElementById('model-dropdown');
+const modelSearch = document.getElementById('model-search');
+const modelList = document.getElementById('model-list');
+const modelDisplayName = document.getElementById('model-display-name');
 
 let isGenerating = false;
 let currentMessageId = null;
+let pendingAttachments = [];
+
+// Combobox state
+let allModels = [];         // [{providerId, providerName, modelId, modelName}]
+let selectedModelValue = null; // 'providerId::modelId'
 
 // Initialize
 async function init() {
@@ -35,6 +50,10 @@ async function init() {
   });
 
   sendBtn.addEventListener('click', sendMessage);
+
+  // Attach file button
+  attachBtn.addEventListener('click', () => fileInput.click());
+  fileInput.addEventListener('change', handleFileSelect);
   
   stopBtn.addEventListener('click', () => {
     if (isGenerating && currentMessageId) {
@@ -57,63 +76,156 @@ async function init() {
 }
 
 async function loadProviders() {
-  // Get from background script
   const res = await chrome.runtime.sendMessage({ type: 'GET_MODELS' });
-  if (res && res.providers) {
-    modelSelector.innerHTML = '<option value="" disabled>Select Model...</option>';
-    
-    for (const [providerId, data] of Object.entries(res.providers)) {
-      if (data.models && data.models.length > 0) {
-        const optgroup = document.createElement('optgroup');
-        optgroup.label = data.name || providerId;
-        
-        data.models.sort((a, b) => a.name.localeCompare(b.name)).forEach(model => {
-          const opt = document.createElement('option');
-          opt.value = `${providerId}::${model.id}`;
-          opt.textContent = model.name;
-          optgroup.appendChild(opt);
+  if (!res || !res.providers) return;
+
+  allModels = [];
+  for (const [providerId, data] of Object.entries(res.providers)) {
+    if (data.models && data.models.length > 0) {
+      const sorted = [...data.models].sort((a, b) => a.name.localeCompare(b.name));
+      for (const m of sorted) {
+        allModels.push({
+          providerId,
+          providerName: data.name || providerId,
+          modelId: m.id,
+          modelName: m.name,
+          value: `${providerId}::${m.id}`
         });
-        
-        modelSelector.appendChild(optgroup);
       }
     }
-    
-    // Set active model if any
-    const active = await chrome.runtime.sendMessage({ type: 'GET_ACTIVE_MODEL' });
-    if (active && active.providerId && active.modelId) {
-      modelSelector.value = `${active.providerId}::${active.modelId}`;
-    } else if (modelSelector.options.length > 1) {
-      modelSelector.selectedIndex = 1; // Select first available
-    }
   }
+
+  // Restore active model
+  const active = await chrome.runtime.sendMessage({ type: 'GET_ACTIVE_MODEL' });
+  if (active && active.providerId && active.modelId) {
+    const val = `${active.providerId}::${active.modelId}`;
+    const match = allModels.find(m => m.value === val);
+    if (match) selectModel(match, false);
+  } else if (allModels.length > 0) {
+    selectModel(allModels[0], false);
+  }
+
+  renderModelList('');
 }
 
-modelSelector.addEventListener('change', () => {
-  if (modelSelector.value) {
-    const [providerId, modelId] = modelSelector.value.split('::');
+// --- Combobox logic ---
+
+function renderModelList(query) {
+  const q = query.toLowerCase();
+  const filtered = allModels.filter(m =>
+    m.modelName.toLowerCase().includes(q) ||
+    m.providerName.toLowerCase().includes(q)
+  );
+
+  if (filtered.length === 0) {
+    modelList.innerHTML = '<div class="model-no-results">No models found</div>';
+    return;
+  }
+
+  // Group by provider
+  const groups = {};
+  for (const m of filtered) {
+    if (!groups[m.providerName]) groups[m.providerName] = [];
+    groups[m.providerName].push(m);
+  }
+
+  let html = '';
+  for (const [providerName, models] of Object.entries(groups)) {
+    html += `<div class="model-group-label">${providerName}</div>`;
+    for (const m of models) {
+      const isSelected = m.value === selectedModelValue;
+      html += `<div class="model-item${isSelected ? ' selected' : ''}" data-value="${m.value}" data-name="${m.modelName}">${m.modelName}</div>`;
+    }
+  }
+  modelList.innerHTML = html;
+
+  modelList.querySelectorAll('.model-item').forEach(el => {
+    el.addEventListener('click', () => {
+      const m = allModels.find(m => m.value === el.dataset.value);
+      if (m) selectModel(m, true);
+      closeDropdown();
+    });
+  });
+}
+
+function selectModel(m, notify) {
+  selectedModelValue = m.value;
+  modelDisplayName.textContent = m.modelName;
+  if (notify) {
+    const [providerId, ...rest] = m.value.split('::');
+    const modelId = rest.join('::');
     chrome.runtime.sendMessage({ type: 'SET_ACTIVE_MODEL', payload: { providerId, modelId } });
     clearChat();
   }
+}
+
+function openDropdown() {
+  modelDropdown.classList.remove('hidden');
+  modelTrigger.classList.add('open');
+  modelSearch.value = '';
+  renderModelList('');
+  modelSearch.focus();
+}
+
+function closeDropdown() {
+  modelDropdown.classList.add('hidden');
+  modelTrigger.classList.remove('open');
+}
+
+modelTrigger.addEventListener('click', (e) => {
+  e.stopPropagation();
+  modelDropdown.classList.contains('hidden') ? openDropdown() : closeDropdown();
+});
+
+modelSearch.addEventListener('input', () => renderModelList(modelSearch.value));
+
+modelSearch.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeDropdown();
+});
+
+document.addEventListener('click', (e) => {
+  if (!modelCombobox.contains(e.target)) closeDropdown();
 });
 
 async function sendMessage() {
   const text = chatInput.value.trim();
   if (!text || isGenerating) return;
 
-  const selectedModel = modelSelector.value;
-  if (!selectedModel) {
+  if (!selectedModelValue) {
     appendMessage('System', 'Please select a model first.', 'system-msg');
     return;
   }
   
-  const [providerId, modelId] = selectedModel.split('::');
+  const [providerId, ...rest] = selectedModelValue.split('::');
+  const modelId = rest.join('::');
 
   // Reset input
   chatInput.value = '';
   chatInput.style.height = 'auto';
 
+  // Collect attachments
+  const attachments = [...pendingAttachments];
+  clearAttachments();
+
+  // Build user message HTML with attachment previews
+  let userMsgHtml = '';
+  if (attachments.length > 0) {
+    userMsgHtml += '<div class="msg-attachments">';
+    for (const att of attachments) {
+      if (att.type.startsWith('image/')) {
+        userMsgHtml += `<img src="data:${att.type};base64,${att.data}" alt="${att.name}">`;
+      } else {
+        const icon = getFileIcon(att.type);
+        userMsgHtml += `<span class="file-badge"><span class="material-symbols-outlined">${icon}</span> ${att.name}</span>`;
+      }
+    }
+    userMsgHtml += '</div>';
+  }
+  userMsgHtml += renderMarkdown(text);
+
   // Add user message to UI
-  appendMessage('You', text, 'user-msg');
+  const userEl = appendMessage('You', '', 'user-msg');
+  userEl.innerHTML = userMsgHtml;
   
   let pageContext = null;
   if (contextToggle.checked) {
@@ -155,7 +267,8 @@ async function sendMessage() {
       providerId,
       modelId,
       text,
-      pageContext
+      pageContext,
+      attachments
     }
   });
 }
@@ -209,16 +322,82 @@ function finishGeneration() {
 }
 
 function clearChat() {
-  // Clear the UI
   chatContainer.innerHTML = '<div class="message system-msg">Welcome to Spin Your AI! Select a model and start chatting.</div>';
-  // Clear the backend history
   chrome.runtime.sendMessage({ type: 'CLEAR_HISTORY' });
-  // Reset generation state
   isGenerating = false;
   currentMessageId = null;
   currentAiText = '';
   stopBtn.classList.add('hidden');
   sendBtn.classList.remove('hidden');
+  clearAttachments();
+}
+
+// --- File attachment handling ---
+
+function handleFileSelect(e) {
+  const files = Array.from(e.target.files);
+  if (!files.length) return;
+
+  for (const file of files) {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const base64 = reader.result.split(',')[1];
+      pendingAttachments.push({
+        name: file.name,
+        type: file.type || 'application/octet-stream',
+        data: base64
+      });
+      renderAttachmentPreviews();
+    };
+    reader.readAsDataURL(file);
+  }
+  // Reset file input so the same file can be re-selected
+  fileInput.value = '';
+}
+
+function renderAttachmentPreviews() {
+  if (pendingAttachments.length === 0) {
+    attachmentPreview.classList.add('hidden');
+    attachmentPreview.innerHTML = '';
+    return;
+  }
+  attachmentPreview.classList.remove('hidden');
+  attachmentPreview.innerHTML = pendingAttachments.map((att, i) => {
+    const icon = getFileIcon(att.type);
+    const thumb = att.type.startsWith('image/')
+      ? `<img class="thumb" src="data:${att.type};base64,${att.data}" alt="${att.name}">`
+      : `<span class="material-symbols-outlined">${icon}</span>`;
+    return `<div class="attachment-chip">
+      ${thumb}
+      <span class="file-name">${att.name}</span>
+      <button class="remove-attachment" data-index="${i}"><span class="material-symbols-outlined">close</span></button>
+    </div>`;
+  }).join('');
+
+  // Wire remove buttons
+  attachmentPreview.querySelectorAll('.remove-attachment').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const idx = parseInt(e.currentTarget.dataset.index);
+      pendingAttachments.splice(idx, 1);
+      renderAttachmentPreviews();
+    });
+  });
+}
+
+function clearAttachments() {
+  pendingAttachments = [];
+  attachmentPreview.classList.add('hidden');
+  attachmentPreview.innerHTML = '';
+}
+
+function getFileIcon(mimeType) {
+  if (mimeType.startsWith('image/')) return 'image';
+  if (mimeType.startsWith('audio/')) return 'audio_file';
+  if (mimeType.startsWith('video/')) return 'video_file';
+  if (mimeType === 'application/pdf') return 'picture_as_pdf';
+  if (mimeType.startsWith('text/html')) return 'html';
+  if (mimeType.startsWith('text/css')) return 'css';
+  return 'draft';
 }
 
 document.addEventListener('DOMContentLoaded', init);
