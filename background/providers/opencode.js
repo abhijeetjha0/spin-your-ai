@@ -34,11 +34,20 @@ export class OpenCodeProvider extends BaseProvider {
     const authHeader = this.getAuthHeader();
     if (authHeader) headers['Authorization'] = authHeader;
 
-    const prompt = messages[messages.length - 1].content;
+    // OpenCode's API only accepts a single 'message' string.
+    // If there is a system message (like page context), we must prepend it to the user prompt.
+    let fullPrompt = '';
+    const systemMsg = messages.find(m => m.role === 'system');
+    if (systemMsg) {
+      fullPrompt += systemMsg.content + '\n\n---\n\n';
+    }
+    const userMsg = messages.filter(m => m.role === 'user').pop();
+    fullPrompt += userMsg ? userMsg.content : '';
+
     const res = await fetch(`${this.baseUrl}/api/chat`, {
       method: 'POST',
       headers,
-      body: JSON.stringify({ message: prompt }),
+      body: JSON.stringify({ message: fullPrompt }),
       signal
     });
 

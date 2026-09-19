@@ -22,8 +22,7 @@ function getPageContext() {
 
 // Listen for messages from the extension (side panel or background)
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  if (request.type === 'GET_PAGE_CONTEXT') {
-    sendResponse(getPageContext());
+  if (request.type === 'GET_CONTEXT') {
+    sendResponse({ ok: true, payload: getPageContext() });
   }
-  return true;
 });

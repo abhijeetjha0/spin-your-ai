@@ -114,12 +114,23 @@ async function sendMessage() {
   let pageContext = null;
   if (contextToggle.checked) {
     try {
-      const tabs = await chrome.tabs.query({active: true, currentWindow: true});
-      if (tabs[0]) {
-        pageContext = await chrome.tabs.sendMessage(tabs[0].id, { type: 'GET_PAGE_CONTEXT' });
+      const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+      if (tab) {
+        if (tab.url && (tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://'))) {
+          appendMessage('System', '⚠️ Cannot read page context on internal Chrome pages.', 'error');
+        } else {
+          const response = await chrome.tabs.sendMessage(tab.id, { type: 'GET_CONTEXT' });
+          if (response && response.ok) {
+            pageContext = response.payload;
+          } else {
+            appendMessage('System', '⚠️ Failed to read page context. Please refresh the page and try again.', 'error');
+          }
+        }
       }
     } catch(e) {
-      console.error("Could not get page context", e);
+      // The content script isn't running on this tab (e.g. internal page or stale tab). 
+      // Handled gracefully in UI, no need to log a scary console warning.
+      appendMessage('System', '⚠️ Could not read page context. Ensure you are on a valid webpage and refresh it.', 'error');
     }
   }
 
