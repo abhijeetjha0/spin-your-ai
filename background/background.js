@@ -16,6 +16,7 @@ chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
 
 // Active generation controllers for cancelling
 const activeGenerations = new Map();
+let conversationHistory = [];
 
 async function getProviderInstance(providerId, passedConfig = null) {
   const config = passedConfig || await vault.getConfig(providerId);
@@ -63,7 +64,13 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.type === 'SEND_CHAT') {
     handleSendChat(request.payload);
     sendResponse({ ok: true });
-    return true; // We don't await the streaming here, it streams via events
+    return true;
+  }
+
+  if (request.type === 'CLEAR_HISTORY') {
+    conversationHistory = [];
+    sendResponse({ ok: true });
+    return true;
   }
 
   if (request.type === 'STOP_GENERATION') {
@@ -135,6 +142,7 @@ async function handleSendChat(payload) {
   const controller = new AbortController();
   activeGenerations.set(messageId, controller);
   
+  // Build messages array: system context + full conversation history + new user message
   const messages = [];
   
   if (pageContext) {
@@ -145,13 +153,27 @@ async function handleSendChat(payload) {
     messages.push({ role: 'system', content: contextStr });
   }
 
+  // Append full conversation history for multi-turn context
+  messages.push(...conversationHistory);
+  
+  // Add the new user message
   messages.push({ role: 'user', content: text });
+  
+  // Track the user message in history
+  conversationHistory.push({ role: 'user', content: text });
+
+  let fullResponse = '';
 
   try {
     const generator = provider.chat(modelId, messages, controller.signal);
     for await (const chunk of generator) {
       if (controller.signal.aborted) break;
+      fullResponse += chunk;
       emitStreamChunk(messageId, chunk, false);
+    }
+    // Track the AI response in history
+    if (fullResponse) {
+      conversationHistory.push({ role: 'assistant', content: fullResponse });
     }
     emitStreamChunk(messageId, null, true);
   } catch (err) {

@@ -5,6 +5,7 @@
   <title>Spin Your AI</title>
   <link rel="stylesheet" href="sidepanel.css">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet">
 </head>
 <body>
   <div class="app-container">
@@ -17,7 +18,8 @@
         <select id="model-selector" class="model-dropdown">
           <option value="" disabled selected>Select Model...</option>
         </select>
-        <button id="options-btn" class="icon-btn" title="Settings">⚙️</button>
+        <button id="new-chat-btn" class="icon-btn" title="New Chat"><span class="material-symbols-outlined">delete</span></button>
+        <button id="options-btn" class="icon-btn" title="Settings"><span class="material-symbols-outlined">settings</span></button>
       </div>
     </header>
 
@@ -32,16 +34,16 @@
       <div class="context-toggle">
         <label class="toggle-pill">
           <input type="checkbox" id="include-page-context">
-          <span class="pill-text">📄 Include page content</span>
+          <span class="pill-text"><span class="material-symbols-outlined" style="font-size:16px;vertical-align:middle">description</span> Include page content</span>
         </label>
       </div>
       <div class="input-wrapper">
         <textarea id="chat-input" placeholder="Ask anything..." rows="1"></textarea>
         <button id="send-btn" class="send-btn">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+          <span class="material-symbols-outlined">send</span>
         </button>
         <button id="stop-btn" class="stop-btn hidden">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="6" width="12" height="12"/></svg>
+          <span class="material-symbols-outlined">stop_circle</span>
         </button>
       </div>
     </footer>

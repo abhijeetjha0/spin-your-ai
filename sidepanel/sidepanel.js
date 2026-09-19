@@ -6,6 +6,7 @@ const sendBtn = document.getElementById('send-btn');
 const stopBtn = document.getElementById('stop-btn');
 const modelSelector = document.getElementById('model-selector');
 const optionsBtn = document.getElementById('options-btn');
+const newChatBtn = document.getElementById('new-chat-btn');
 const contextToggle = document.getElementById('include-page-context');
 
 let isGenerating = false;
@@ -18,6 +19,8 @@ async function init() {
   optionsBtn.addEventListener('click', () => {
     chrome.runtime.openOptionsPage();
   });
+
+  newChatBtn.addEventListener('click', clearChat);
 
   chatInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -89,6 +92,7 @@ modelSelector.addEventListener('change', () => {
   if (modelSelector.value) {
     const [providerId, modelId] = modelSelector.value.split('::');
     chrome.runtime.sendMessage({ type: 'SET_ACTIVE_MODEL', payload: { providerId, modelId } });
+    clearChat();
   }
 });
 
@@ -117,20 +121,20 @@ async function sendMessage() {
       const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
       if (tab) {
         if (tab.url && (tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://'))) {
-          appendMessage('System', '⚠️ Cannot read page context on internal Chrome pages.', 'error');
+          appendMessage('System', '<span class="material-symbols-outlined" style="font-size:16px;vertical-align:middle;color:#ef4444">warning</span> Cannot read page context on internal Chrome pages.', 'error');
         } else {
           const response = await chrome.tabs.sendMessage(tab.id, { type: 'GET_CONTEXT' });
           if (response && response.ok) {
             pageContext = response.payload;
           } else {
-            appendMessage('System', '⚠️ Failed to read page context. Please refresh the page and try again.', 'error');
+            appendMessage('System', '<span class="material-symbols-outlined" style="font-size:16px;vertical-align:middle;color:#ef4444">warning</span> Failed to read page context. Please refresh the page and try again.', 'error');
           }
         }
       }
     } catch(e) {
       // The content script isn't running on this tab (e.g. internal page or stale tab). 
       // Handled gracefully in UI, no need to log a scary console warning.
-      appendMessage('System', '⚠️ Could not read page context. Ensure you are on a valid webpage and refresh it.', 'error');
+      appendMessage('System', '<span class="material-symbols-outlined" style="font-size:16px;vertical-align:middle;color:#ef4444">warning</span> Could not read page context. Ensure you are on a valid webpage and refresh it.', 'error');
     }
   }
 
@@ -175,7 +179,7 @@ function handleStreamChunk(chunk, done, error) {
   if (!msgEl) return;
 
   if (error) {
-    msgEl.innerHTML = `⚠️ Error: ${error}`;
+    msgEl.innerHTML = `<span class="material-symbols-outlined" style="font-size:16px;vertical-align:middle;color:#ef4444">warning</span> Error: ${error}`;
     msgEl.style.color = '#ef4444';
     finishGeneration();
     return;
@@ -197,6 +201,19 @@ function handleStreamChunk(chunk, done, error) {
 }
 
 function finishGeneration() {
+  isGenerating = false;
+  currentMessageId = null;
+  currentAiText = '';
+  stopBtn.classList.add('hidden');
+  sendBtn.classList.remove('hidden');
+}
+
+function clearChat() {
+  // Clear the UI
+  chatContainer.innerHTML = '<div class="message system-msg">Welcome to Spin Your AI! Select a model and start chatting.</div>';
+  // Clear the backend history
+  chrome.runtime.sendMessage({ type: 'CLEAR_HISTORY' });
+  // Reset generation state
   isGenerating = false;
   currentMessageId = null;
   currentAiText = '';

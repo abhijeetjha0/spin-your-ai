@@ -88,19 +88,21 @@ async function renderCards() {
           });
           html += `</select>`;
         } else {
-          // If it's a password and we have a value, mask it visually, but store real value in dataset
-          const isMasked = field.type === 'password' && value;
-          const displayValue = isMasked ? '••••••••' + value.slice(-4) : value;
-          
-          html += `<input type="${field.type === 'password' && !isMasked ? 'text' : field.type}" 
-                   name="${field.key}" 
-                   value="${displayValue}" 
-                   data-real-value="${value}"
-                   ${isMasked ? 'readonly' : ''}
-                   placeholder="${field.type === 'password' ? 'sk-...' : 'http://...'}">`;
-                   
           if (field.type === 'password') {
-            html += `<button type="button" class="icon-btn reveal-btn" title="Edit/Reveal">✏️</button>`;
+            const isMasked = !!value;
+            html += `<input type="password" 
+                     name="${field.key}" 
+                     value="${isMasked ? '' : ''}" 
+                     data-real-value="${value}"
+                     ${isMasked ? 'readonly' : ''}
+                     placeholder="${isMasked ? '••••••••' + value.slice(-4) : 'sk-...'}">`;
+            html += `<button type="button" class="icon-btn reveal-btn" title="Edit"><span class="material-symbols-outlined">edit</span></button>`;
+            html += `<button type="button" class="icon-btn peek-btn" title="Show/Hide"><span class="material-symbols-outlined">visibility</span></button>`;
+          } else {
+            html += `<input type="${field.type}" 
+                     name="${field.key}" 
+                     value="${value}" 
+                     placeholder="${field.default || 'http://...'}">`;
           }
         }
         
@@ -134,14 +136,34 @@ function attachEvents() {
     });
   });
 
-  // Reveal buttons
+  // Edit buttons - unlock the field for editing but keep it masked
   document.querySelectorAll('.reveal-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
-      const input = e.target.previousElementSibling;
+      const inputRow = e.target.closest('.input-row');
+      const input = inputRow.querySelector('input');
       input.readOnly = false;
-      input.type = 'text';
       input.value = input.dataset.realValue || '';
+      input.placeholder = 'Enter new value...';
       input.focus();
+    });
+  });
+
+  // Peek buttons - toggle password visibility temporarily
+  document.querySelectorAll('.peek-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const inputRow = e.target.closest('.input-row');
+      const input = inputRow.querySelector('input');
+      // If the field is masked and empty, show the stored value temporarily
+      const realValue = input.dataset.realValue || '';
+      if (input.type === 'password') {
+        input.type = 'text';
+        if (input.readOnly && !input.value) input.value = realValue;
+        e.target.innerHTML = '<span class="material-symbols-outlined">visibility_off</span>';
+      } else {
+        input.type = 'password';
+        if (input.readOnly) { input.value = ''; }
+        e.target.innerHTML = '<span class="material-symbols-outlined">visibility</span>';
+      }
     });
   });
 
