@@ -7,15 +7,22 @@ export function renderMarkdown(text) {
   if (!text) return '';
 
   // --- Step 1: Extract and protect code blocks from further processing ---
-  const codeBlocks = [];
+  const protectedBlocks = [];
   text = text.replace(/```(\w*)\n?([\s\S]*?)```/g, (match, lang, code) => {
     const escaped = code
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;');
-    const idx = codeBlocks.length;
-    codeBlocks.push(`<pre><code class="language-${lang || 'plaintext'}">${escaped}</code></pre>`);
-    return `\x00CODE${idx}\x00`;
+    const idx = protectedBlocks.length;
+    protectedBlocks.push(`<pre><code class="language-${lang || 'plaintext'}">${escaped}</code></pre>`);
+    return `\x00BLOCK${idx}\x00`;
+  });
+
+  // --- Step 1.5: Protect Material Symbol Spans ---
+  text = text.replace(/<span class="material-symbols-outlined"(.*?)>([^<]+)<\/span>/g, (match, attrs, content) => {
+    const idx = protectedBlocks.length;
+    protectedBlocks.push(`<span class="material-symbols-outlined"${attrs}>${content}</span>`);
+    return `\x00BLOCK${idx}\x00`;
   });
 
   // --- Step 2: Escape HTML in remaining text ---
@@ -109,8 +116,8 @@ export function renderMarkdown(text) {
 
   let html = output.join('');
 
-  // --- Step 5: Restore protected code blocks ---
-  html = html.replace(/\x00CODE(\d+)\x00/g, (_, idx) => codeBlocks[idx]);
+  // --- Step 5: Restore protected blocks (code blocks & icons) ---
+  html = html.replace(/\x00BLOCK(\d+)\x00/g, (_, idx) => protectedBlocks[idx]);
 
   return html;
 }

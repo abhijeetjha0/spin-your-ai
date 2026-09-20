@@ -364,12 +364,12 @@ function attachEvents() {
       }
 
       if (res && res.ok) {
-        showToast(`✅ Connection successful`, 'success');
+        showToast(`<span class="material-symbols-outlined" style="vertical-align:-4px">check_circle</span> Connection successful`, 'success');
       } else {
         if (id === 'mcp') {
-          showToast(`❌ MCP connection test failed`, 'error');
+          showToast(`<span class="material-symbols-outlined" style="vertical-align:-4px">error</span> MCP connection test failed`, 'error');
         } else {
-          showToast(`❌ Failed: ${res?.error || 'Unknown error'}`, 'error');
+          showToast(`<span class="material-symbols-outlined" style="vertical-align:-4px">error</span> Failed: ${res?.error || 'Unknown error'}`, 'error');
         }
       }
     });
@@ -391,7 +391,7 @@ function showToast(msg, type) {
 
   const t = document.createElement('div');
   t.className = `toast ${type}`;
-  t.textContent = msg;
+  t.innerHTML = msg;
   container.appendChild(t);
 
   setTimeout(() => {

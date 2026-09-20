@@ -36,6 +36,7 @@
           <li><strong>Include Page Context:</strong> Toggle the "Include page content" switch to let the AI read the webpage you are currently viewing.</li>
           <li><strong>Attachments:</strong> Click the paperclip icon to upload images, documents, or code files to send to multimodal models.</li>
           <li><strong>Clear Chat:</strong> Click the trash icon at the top to reset the conversation history.</li>
+          <li><strong>Pinning:</strong> The top header (with the pin icon and the X) is the native Chrome Side Panel UI. Clicking the pin icon there will unpin the extension from your main browser toolbar.</li>
         </ul>
       </section>
 
@@ -53,7 +54,8 @@
         <p>Spin Your AI supports true Agentic behavior via the Model Context Protocol (MCP)!</p>
         <ul>
           <li><strong>JSON Config:</strong> In Settings, use the "MCP Servers" JSON box to configure your HTTP/SSE based MCP servers (like n8n).</li>
-          <li><strong>Tool Calling:</strong> When using capable models (e.g., OpenAI), the model will autonomously execute tools from your MCP servers during chat!</li>
+          <li><strong>Tool Calling:</strong> When using capable models (e.g., <strong>OpenAI</strong> or <strong>Gemini</strong>), the model will autonomously execute tools from your MCP servers during chat!</li>
+          <li><strong>Ollama:</strong> Note that local tool calling for Ollama is not yet supported by the extension (coming soon).</li>
           <li><strong>Note:</strong> Standard local Stdio MCP servers require a native messaging host. Only HTTP/SSE endpoints are currently supported natively in the browser.</li>
         </ul>
       </section>

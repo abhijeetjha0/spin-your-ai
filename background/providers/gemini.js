@@ -164,7 +164,7 @@ export class GeminiProvider extends BaseProvider {
 
         const functionResponses = [];
         for (const tc of toolCallsBuffer) {
-           yield `\n\n> ⚙️ *Executing tool: ${tc.name}...*\n\n`;
+           yield `\n\n> <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;color:#a78bfa">settings</span> *Executing tool: ${tc.name}...*\n\n`;
            try {
              const result = await executeTool(tc.name, tc.args);
              const resultStr = typeof result === 'object' ? JSON.stringify(result) : String(result);
@@ -176,7 +176,7 @@ export class GeminiProvider extends BaseProvider {
                }
              });
            } catch(e) {
-              yield `\n\n> ❌ *Tool error: ${e.message}*\n\n`;
+              yield `\n\n> <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;color:#ef4444">error</span> *Tool error: ${e.message}*\n\n`;
               functionResponses.push({
                functionResponse: {
                  name: tc.name,

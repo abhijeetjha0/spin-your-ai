@@ -37,7 +37,9 @@ Set the `OLLAMA_ORIGINS` environment variable to `*` in your system environment 
 
 ### Model Context Protocol (MCP)
 Spin Your AI fully supports Tool Calling (Agentic mode) via the Model Context Protocol (MCP). 
-Currently, only **HTTP/SSE based MCP Servers** (like the n8n MCP Server) are supported natively in the browser without a messaging host.
+When using capable models (e.g., **OpenAI**, **Gemini**), the model will autonomously discover and execute tools from your MCP servers directly in the browser! Note: **Ollama** local tool calling is not yet implemented.
+
+Currently, only **HTTP/SSE based MCP Servers** (like the n8n MCP Server) are supported natively in the browser without a messaging host. The extension strictly requires the server to support `text/event-stream` for tool execution responses.
 
 To configure MCP servers, provide a JSON configuration object in the Options page:
 ```json

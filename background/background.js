@@ -12,7 +12,9 @@ import { HermesProvider } from './providers/hermes.js';
 import { HuggingFaceProvider } from './providers/huggingface.js';
 
 // Setup side panel behavior to open on action click
-chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
+chrome.runtime.onInstalled.addListener(() => {
+  chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(console.error);
+});
 
 // Active generation controllers for cancelling
 const activeGenerations = new Map();

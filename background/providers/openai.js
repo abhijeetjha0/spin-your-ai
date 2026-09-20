@@ -106,7 +106,7 @@ export class OpenAIProvider extends BaseProvider {
       const toolCalls = Object.values(toolCallsBuffer);
       
       if (toolCalls.length > 0) {
-        yield "\n\n> ⚙️ *Executing tool...*\n\n";
+        yield '\n\n> <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;color:#a78bfa">settings</span> *Executing tool...*\n\n';
         
         currentMessages.push({
           role: 'assistant',
