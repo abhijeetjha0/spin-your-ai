@@ -169,7 +169,6 @@ function selectModel(m, notify) {
     const [providerId, ...rest] = m.value.split('::');
     const modelId = rest.join('::');
     chrome.runtime.sendMessage({ type: 'SET_ACTIVE_MODEL', payload: { providerId, modelId } });
-    clearChat();
   }
 }
 
@@ -303,6 +302,9 @@ async function sendMessage() {
   }, 500);
 
   isGenerating = true;
+  chatInput.disabled = true;
+  attachBtn.disabled = true;
+  chatInput.placeholder = "Processing...";
   sendBtn.classList.add('hidden');
   stopBtn.classList.remove('hidden');
 
@@ -370,10 +372,16 @@ function finishGeneration() {
     window.thinkingInterval = null;
   }
   isGenerating = false;
+  chatInput.disabled = false;
+  attachBtn.disabled = false;
+  chatInput.placeholder = "Type your message...";
   currentMessageId = null;
   currentAiText = '';
   stopBtn.classList.add('hidden');
   sendBtn.classList.remove('hidden');
+  
+  // Focus input automatically after generation finishes
+  setTimeout(() => chatInput.focus(), 100);
 }
 
 function clearChat() {
