@@ -49,12 +49,22 @@
       </section>
       
       <section class="help-section">
-        <h2>4. Troubleshooting</h2>
+        <h2>4. Model Context Protocol (MCP) & Agents</h2>
+        <p>Spin Your AI supports true Agentic behavior via the Model Context Protocol (MCP)!</p>
+        <ul>
+          <li><strong>JSON Config:</strong> In Settings, use the "MCP Servers" JSON box to configure your HTTP/SSE based MCP servers (like n8n).</li>
+          <li><strong>Tool Calling:</strong> When using capable models (e.g., OpenAI), the model will autonomously execute tools from your MCP servers during chat!</li>
+          <li><strong>Note:</strong> Standard local Stdio MCP servers require a native messaging host. Only HTTP/SSE endpoints are currently supported natively in the browser.</li>
+        </ul>
+      </section>
+
+      <section class="help-section">
+        <h2>5. Troubleshooting</h2>
         <p>If you encounter issues connecting to a provider:</p>
         <ul>
           <li>Ensure you have sufficient API credits on your provider's dashboard.</li>
-          <li>Use the "Test" button on the Settings page to verify your credentials.</li>
-          <li>If using local MCP Servers, verify that the server URL is reachable.</li>
+          <li>Use the "Test Connection" button on the Settings page to verify your credentials.</li>
+          <li>If using local MCP Servers, verify that your JSON config is valid and the server URL is reachable over HTTP.</li>
         </ul>
       </section>
     </main>

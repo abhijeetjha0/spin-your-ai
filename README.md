@@ -15,6 +15,7 @@ A Manifest V3 Chrome Extension that lets you spin up AI models directly from you
 - **Cloud:** OpenAI, Anthropic (Claude), Google Gemini, Ollama Cloud
 - **Aggregators:** OpenRouter, OpenCode Zen
 - **Dev Platforms:** OpenCode
+- **MCP Servers:** Full support for any HTTP-based Model Context Protocol (MCP) server.
 
 ## Configuration
 
@@ -34,11 +35,28 @@ OLLAMA_ORIGINS="*" ollama serve
 **Windows:**
 Set the `OLLAMA_ORIGINS` environment variable to `*` in your system environment variables before launching Ollama.
 
+### Model Context Protocol (MCP)
+Spin Your AI fully supports Tool Calling (Agentic mode) via the Model Context Protocol (MCP). 
+Currently, only **HTTP/SSE based MCP Servers** (like the n8n MCP Server) are supported natively in the browser without a messaging host.
+
+To configure MCP servers, provide a JSON configuration object in the Options page:
+```json
+{
+  "mcpServers": {
+    "n8n": {
+      "command": "http",
+      "url": "http://localhost:5678/api/v1/mcp",
+      "env": {
+        "N8N_API_KEY": "your_api_key_here"
+      }
+    }
+  }
+}
+```
+
 ## Future Opportunities
 
-- **n8n Webhook Integration:** Trigger complex workflow automations directly from the extension.
 - **GitHub Copilot Integration:** Via Native SDK or a lightweight agent bridge for developers.
-- **Full MCP Integration:** Support for MCP servers with true tool-calling and agentic behavior.
 - **Local History:** Fully persistent conversation history stored in the browser.
 
 ## License

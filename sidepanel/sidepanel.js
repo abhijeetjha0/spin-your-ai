@@ -102,12 +102,21 @@ async function loadProviders() {
 
   // Restore active model
   const active = await chrome.runtime.sendMessage({ type: 'GET_ACTIVE_MODEL' });
+  let match = null;
   if (active && active.providerId && active.modelId) {
     const val = `${active.providerId}::${active.modelId}`;
-    const match = allModels.find(m => m.value === val);
-    if (match) selectModel(match, false);
+    match = allModels.find(m => m.value === val);
+  }
+  
+  if (match) {
+    selectModel(match, false);
   } else if (allModels.length > 0) {
     selectModel(allModels[0], false);
+  } else {
+    // No models available at all
+    selectedModelValue = null;
+    modelDisplayName.textContent = 'No models available';
+    chrome.runtime.sendMessage({ type: 'SET_ACTIVE_MODEL', payload: { providerId: null, modelId: null } });
   }
 
   renderModelList('');

@@ -214,7 +214,7 @@ body {
 }
 
 .ai-msg {
-  color: var(--text-main);
+  color: #7dd3fc;
 }
 .ai-msg::before {
   content: "> spin-ai: ";

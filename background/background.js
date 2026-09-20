@@ -9,6 +9,7 @@ import { OpenCodeZenProvider } from './providers/opencode_zen.js';
 import { OpenCodeProvider } from './providers/opencode.js';
 import { OpenClawProvider } from './providers/openclaw.js';
 import { HermesProvider } from './providers/hermes.js';
+import { HuggingFaceProvider } from './providers/huggingface.js';
 
 // Setup side panel behavior to open on action click
 chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
@@ -19,6 +20,7 @@ let conversationHistory = [];
 
 async function getProviderInstance(providerId, passedConfig = null) {
   const config = passedConfig || await vault.getConfig(providerId);
+  if (config && config.enabled === false) return null;
   switch (providerId) {
     case 'ollama': return new OllamaProvider(config);
     case 'openai': return new OpenAIProvider(config);
@@ -30,6 +32,7 @@ async function getProviderInstance(providerId, passedConfig = null) {
     case 'opencode': return new OpenCodeProvider(config);
     case 'openclaw': return new OpenClawProvider(config);
     case 'hermes': return new HermesProvider(config);
+    case 'huggingface': return new HuggingFaceProvider(config);
     default: return null;
   }
 }
@@ -42,7 +45,14 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
   
   if (request.type === 'TEST_CONNECTION') {
-    getProviderInstance(request.payload.providerId, request.payload.config)
+    const { providerId, config } = request.payload;
+    
+    if (providerId === 'mcp') {
+      handleMCPTest(config).then(sendResponse);
+      return true;
+    }
+
+    getProviderInstance(providerId, config)
       .then(provider => provider ? provider.testConnection() : { ok: false, error: 'Provider not found' })
       .then(sendResponse);
     return true;
@@ -82,6 +92,56 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
 });
 
+async function handleMCPTest(config) {
+  try {
+    if (!config.configJson) return { ok: false, error: 'Config is empty', serverStatuses: {} };
+    const parsed = JSON.parse(config.configJson);
+    if (!parsed || !parsed.mcpServers) return { ok: false, error: 'Missing mcpServers object in JSON', serverStatuses: {} };
+    
+    const servers = Object.entries(parsed.mcpServers);
+    if (servers.length === 0) return { ok: false, error: 'No MCP servers defined', serverStatuses: {} };
+
+    const serverStatuses = {};
+    let successCount = 0;
+
+    for (const [key, s] of servers) {
+      const url = s.url || s.serverUrl;
+      if (url && (s.command === 'http' || s.type === 'http' || !s.command)) {
+        const headers = { 
+          'Content-Type': 'application/json',
+          'Accept': 'application/json, text/event-stream'
+        };
+        if (s.env) Object.assign(headers, s.env);
+        if (s.headers) Object.assign(headers, s.headers);
+        
+        try {
+          const res = await fetch(url, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' })
+          });
+          if (res.ok) {
+            successCount++;
+            serverStatuses[key] = { status: 'connected' };
+          } else {
+            const errText = await res.text();
+            serverStatuses[key] = { status: 'error', error: `HTTP ${res.status}: ${errText}` };
+          }
+        } catch (e) {
+          serverStatuses[key] = { status: 'error', error: e.message };
+        }
+      } else {
+        serverStatuses[key] = { status: 'error', error: 'Invalid HTTP endpoint configuration' };
+      }
+    }
+    
+    const ok = successCount > 0;
+    return { ok, error: ok ? undefined : 'Some servers failed to connect', serverStatuses };
+  } catch (err) {
+    return { ok: false, error: 'Invalid JSON config: ' + err.message, serverStatuses: {} };
+  }
+}
+
 async function handleGetModels() {
   const allConfigs = await vault.getAllConfigs();
   const providers = {};
@@ -96,15 +156,18 @@ async function handleGetModels() {
     'opencode_zen': 'OpenCode Zen',
     'opencode': 'OpenCode (Local)',
     'openclaw': 'OpenClaw (Local)',
-    'hermes': 'Hermes Desktop'
+    'hermes': 'Hermes Desktop',
+    'huggingface': 'Hugging Face Inference'
   };
   
   // We probe all of them in parallel
   const promises = Object.keys(providerNames).map(async (id) => {
-    // Only check if they are configured, EXCEPT local auto-discover ones
     const config = allConfigs[id] || {};
     const isAutoDiscover = ['ollama', 'opencode', 'openclaw', 'hermes'].includes(id);
     
+    // If explicitly disabled by toggle, skip it
+    if (config.enabled === false) return;
+
     // Auto-discover ones are probed even if no explicit config exists
     if (!config.apiKey && !config.url && !isAutoDiscover) return;
     

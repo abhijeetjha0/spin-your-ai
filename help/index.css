@@ -3,6 +3,27 @@
   margin: 0 auto;
 }
 
+.header {
+  margin-bottom: 40px;
+  text-align: center;
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+
+.logo h1 {
+  margin: 0;
+  font-size: 28px;
+}
+
+.logo-icon {
+  font-size: 32px;
+}
+
 .help-section {
   background: var(--panel-bg);
   border: 1px solid var(--border-color);
