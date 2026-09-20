@@ -15,7 +15,6 @@ A Manifest V3 Chrome Extension that lets you spin up AI models directly from you
 - **Cloud:** OpenAI, Anthropic (Claude), Google Gemini, Ollama Cloud
 - **Aggregators:** OpenRouter, OpenCode Zen
 - **Dev Platforms:** OpenCode
-- **Tooling:** Any HTTP/SSE MCP Server
 
 ## Configuration
 
@@ -39,7 +38,7 @@ Set the `OLLAMA_ORIGINS` environment variable to `*` in your system environment 
 
 - **n8n Webhook Integration:** Trigger complex workflow automations directly from the extension.
 - **GitHub Copilot Integration:** Via Native SDK or a lightweight agent bridge for developers.
-- **Tool Chaining:** MCP agent mode.
+- **Full MCP Integration:** Support for MCP servers with true tool-calling and agentic behavior.
 - **Local History:** Fully persistent conversation history stored in the browser.
 
 ## License

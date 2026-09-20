@@ -40,19 +40,6 @@ const PROVIDERS = [
         ]
       }
     ]
-  },
-  {
-    category: 'MCP Servers',
-    categoryId: 'mcp',
-    providers: [
-      {
-        id: 'mcp', name: 'MCP Server', fields: [
-          { key: 'url', label: 'Server URL', type: 'text' },
-          { key: 'authType', label: 'Auth Type', type: 'select', options: ['None', 'Bearer', 'API Key', 'Basic'] },
-          { key: 'authToken', label: 'Token / Key', type: 'password' }
-        ]
-      }
-    ]
   }
 ];
 

@@ -9,7 +9,6 @@ import { OpenCodeZenProvider } from './providers/opencode_zen.js';
 import { OpenCodeProvider } from './providers/opencode.js';
 import { OpenClawProvider } from './providers/openclaw.js';
 import { HermesProvider } from './providers/hermes.js';
-import { MCPProvider } from './providers/mcp.js';
 
 // Setup side panel behavior to open on action click
 chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
@@ -31,7 +30,6 @@ async function getProviderInstance(providerId, passedConfig = null) {
     case 'opencode': return new OpenCodeProvider(config);
     case 'openclaw': return new OpenClawProvider(config);
     case 'hermes': return new HermesProvider(config);
-    case 'mcp': return new MCPProvider(config);
     default: return null;
   }
 }
@@ -98,8 +96,7 @@ async function handleGetModels() {
     'opencode_zen': 'OpenCode Zen',
     'opencode': 'OpenCode (Local)',
     'openclaw': 'OpenClaw (Local)',
-    'hermes': 'Hermes Desktop',
-    'mcp': 'MCP Server'
+    'hermes': 'Hermes Desktop'
   };
   
   // We probe all of them in parallel
