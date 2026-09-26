@@ -4,7 +4,7 @@ A Manifest V3 Chrome Extension that lets you spin up AI models directly from you
 
 ## Features
 
-- **Persistent Chat Interface:** Accessible anytime via the Chrome side panel.
+- **Persistent Chat Interface:** Accessible anytime via the Chrome side panel, featuring conversation history and quick model reloads.
 - **Full Configuration:** Manage all your providers and API keys through a dedicated options page.
 - **100% Privacy:** Your API keys are stored in `chrome.storage.local` and never leave your device.
 - **Provider Auto-Discovery:** Automatically detects local agent frameworks like OpenClaw and Hermes Desktop.
