@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "skills": {
+    "duplicate-code-resolver": {
+      "source": "abhijeetjha0/ai",
+      "sourceType": "github",
+      "skillPath": "skills/duplicate-code-resolver/SKILL.md",
+      "computedHash": "e95a9f0c998a0a950608b30bc9227fa0fb697ef14587e371a587e11acd565701"
+    },
+    "feature-implementation-planner": {
+      "source": "abhijeetjha0/ai",
+      "sourceType": "github",
+      "skillPath": "skills/feature-implementation-planner/SKILL.md",
+      "computedHash": "f5ff194066e07854f4207180e88ffed7f2d6bf201f6005622c32ba437232838c"
+    },
+    "generate-ui-manual": {
+      "source": "abhijeetjha0/ai",
+      "sourceType": "github",
+      "skillPath": "skills/generate-ui-manual/SKILL.md",
+      "computedHash": "e515245089546407da2a70db5eb4b27f9b0fbea4b6c7af974a2bef2c28372314"
+    },
+    "multi-agent-skill": {
+      "source": "abhijeetjha0/ai",
+      "sourceType": "github",
+      "skillPath": "skills/multi-agent-skill/SKILL.md",
+      "computedHash": "3ac171073b2ab6f92e693480d6a7d3a4a9afd346bd6b51e44a309deee6bc2cf4"
+    },
+    "test-case-and-coverage-enhancer": {
+      "source": "abhijeetjha0/ai",
+      "sourceType": "github",
+      "skillPath": "skills/test-case-and-coverage-enhancer/SKILL.md",
+      "computedHash": "1d1bd2505e823593e62284e44b246000e361bd1666beaf1b649656ef88e852b1"
+    }
+  }
+}

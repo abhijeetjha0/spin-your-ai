@@ -59,7 +59,7 @@ export async function executeTool(toolName, args) {
             
             if (contentType.includes('text/event-stream')) {
               const text = await res.text();
-              const match = text.match(/data:\s*({.*})/);
+              const match = text.match(/data:\s*({[\s\S]*})/);
               if (match && match[1]) {
                 data = JSON.parse(match[1]);
               } else {
@@ -128,7 +128,7 @@ export async function getActiveTools() {
 
             if (contentType.includes('text/event-stream')) {
               const text = await res.text();
-              const match = text.match(/data:\s*({.*})/);
+              const match = text.match(/data:\s*({[\s\S]*})/);
               if (match && match[1]) {
                 data = JSON.parse(match[1]);
               } else {
