@@ -206,7 +206,7 @@ body {
   color: var(--text-muted);
 }
 .user-msg::before {
-  content: "admin@spin-ai:~$ ";
+  content: "admin@spin-your-ai:~$ ";
   color: #60a5fa;
   font-weight: bold;
   display: block;
@@ -217,7 +217,7 @@ body {
   color: #7dd3fc;
 }
 .ai-msg::before {
-  content: "> spin-ai: ";
+  content: "> spin-your-ai: ";
   color: #a78bfa;
   font-weight: bold;
   display: block;
@@ -450,3 +450,44 @@ body {
   color: var(--text-muted);
 }
 .message .msg-attachments .file-badge .material-symbols-outlined { font-size: 14px; }
+
+/* Modal Styles */
+.modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.7);
+  z-index: 1000;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+.modal-content {
+  background: var(--bg-color);
+  border: 1px solid var(--border-color);
+  width: 90%;
+  max-width: 400px;
+  max-height: 80%;
+  display: flex;
+  flex-direction: column;
+}
+.modal-header {
+  padding: 12px;
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.modal-body {
+  padding: 12px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+@keyframes spin {
+  100% {
+    transform: rotate(360deg);
+  }
+}

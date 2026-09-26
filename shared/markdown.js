@@ -8,7 +8,7 @@ export function renderMarkdown(text) {
 
   // --- Step 1: Extract and protect code blocks from further processing ---
   const protectedBlocks = [];
-  text = text.replace(/```(\w*)\n?([\s\S]*?)```/g, (match, lang, code) => {
+  text = text.replace(/```(\w*)\n?([\s\S]*?)```/g, (_match, lang, code) => {
     const escaped = code
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
@@ -18,8 +18,42 @@ export function renderMarkdown(text) {
     return `\x00BLOCK${idx}\x00`;
   });
 
+  let midProcessItems = [];
+  let hasOpenStream = false;
+
+  // 1. Extract closed <think> tags
+  text = text.replace(/<(think|thinking)>([\s\S]*?)<\/\1>/gi, (_match, _tag, content) => {
+      const escapedContent = content.trim().replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
+      midProcessItems.push(`<div style="margin-bottom: 8px;"><strong>Thought Process:</strong><br>${escapedContent}</div>`);
+      return '';
+  });
+
+  // 2. Extract unclosed <think> tag
+  text = text.replace(/<(think|thinking)>([\s\S]*)$/i, (_match, _tag, content) => {
+      hasOpenStream = true;
+      const escapedContent = content.trim().replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
+      midProcessItems.push(`<div style="margin-bottom: 8px;"><strong>Thinking...</strong><br>${escapedContent}</div>`);
+      return '';
+  });
+
+  // 3. Extract MCP Tool logs
+  text = text.replace(/(?:\n\n)?>\s*<span[^>]*>settings<\/span>\s*\*Executing MCP tool `([^`]+)`\.\.\.\*(?:\n\n)?/gi, (_match, toolName) => {
+      midProcessItems.push(`<div style="margin-bottom: 4px;"><span class="material-symbols-outlined" style="font-size:14px;vertical-align:middle;margin-right:4px;">build</span>Executing MCP Tool: <code>${toolName}</code></div>`);
+      return '';
+  });
+
+  if (midProcessItems.length > 0) {
+      const combinedContent = midProcessItems.join('<hr style="border-color: #333; margin: 8px 0;">');
+      const openAttr = hasOpenStream ? 'open' : '';
+      const detailsHtml = `<details class="thinking-details" ${openAttr} style="margin: 0 0 16px 0; border: 1px solid var(--border-color); background: #000; padding: 8px;"><summary style="cursor: pointer; color: var(--text-muted); font-size: 0.9em; user-select: none; font-weight: bold;"><span class="material-symbols-outlined" style="font-size:16px;vertical-align:middle;margin-right:6px;">psychology</span>Mid-Process Analysis (${midProcessItems.length})</summary><div class="details-content" style="padding-top:12px; font-size:0.9em; color:var(--text-muted);">${combinedContent}</div></details>`;
+      
+      const idx = protectedBlocks.length;
+      protectedBlocks.push(detailsHtml);
+      text = `\x00BLOCK${idx}\x00\n\n` + text.trimStart();
+  }
+
   // --- Step 1.5: Protect Material Symbol Spans ---
-  text = text.replace(/<span class="material-symbols-outlined"(.*?)>([^<]+)<\/span>/g, (match, attrs, content) => {
+  text = text.replace(/<span class="material-symbols-outlined"(.*?)>([^<]+)<\/span>/g, (_match, attrs, content) => {
     const idx = protectedBlocks.length;
     protectedBlocks.push(`<span class="material-symbols-outlined"${attrs}>${content}</span>`);
     return `\x00BLOCK${idx}\x00`;

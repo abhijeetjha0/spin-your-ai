@@ -1,95 +1,26 @@
-import { BaseProvider } from './base.js';
+import { OpenAIProvider } from './openai.js';
 
-export class OllamaProvider extends BaseProvider {
+export class OllamaProvider extends OpenAIProvider {
   constructor(config) {
-    super('ollama', config);
-    this.baseUrl = this.normalizeUrl(this.config.url || 'http://localhost:11434');
+    super(config);
+    this.name = 'ollama';
+    this.config.apiKeyRequired = false;
+    this.supportsTools = false;
+    let url = this.normalizeUrl(this.config.url || 'http://localhost:11434');
+    this.baseUrl = url.endsWith('/v1') ? url : `${url.replace(/\/$/, '')}/v1`;
   }
 
   async getModels() {
     try {
-      const res = await fetch(`${this.baseUrl}/api/tags`);
+      // Use original Ollama tags endpoint to list models
+      const tagsUrl = this.baseUrl.replace(/\/v1\/?$/, '') + '/api/tags';
+      const res = await fetch(tagsUrl);
       if (!res.ok) throw new Error('Failed to fetch Ollama models');
       const data = await res.json();
       return data.models.map(m => ({ id: m.name, name: m.name }));
     } catch (e) {
       console.warn('Ollama not running or unreachable:', e);
       return [];
-    }
-  }
-
-  async *chat(modelId, messages, signal) {
-    let res;
-    try {
-      // Convert multimodal content to Ollama format
-      const formattedMessages = messages.map(m => {
-        if (Array.isArray(m.content)) {
-          const textParts = m.content.filter(p => p.type === 'text').map(p => p.text);
-          const images = m.content.filter(p => p.type === 'image').map(p => p.data);
-          const msg = { role: m.role, content: textParts.join('\n') };
-          if (images.length > 0) msg.images = images;
-          return msg;
-        }
-        return m;
-      });
-
-      res = await fetch(`${this.baseUrl}/api/chat`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: modelId,
-          messages: formattedMessages,
-          stream: true
-        }),
-        signal
-      });
-    } catch (e) {
-      throw new Error(`Failed to communicate with Ollama. Is it running? (${e.message})`);
-    }
-
-    if (!res.ok) {
-      const text = await res.text();
-      let errorMsg = text;
-      try { errorMsg = JSON.parse(text).error || text; } catch (e) {}
-      
-      if (!errorMsg && res.status === 403) {
-        errorMsg = "CORS error (403 Forbidden). You must set OLLAMA_ORIGINS='*' or allow your extension ID before starting Ollama.";
-      } else if (!errorMsg) {
-        errorMsg = `HTTP ${res.status}`;
-      }
-      
-      throw new Error(`Ollama API Error: ${errorMsg}`);
-    }
-
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder('utf-8');
-    let buffer = '';
-
-    try {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
-        
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (!trimmed) continue;
-          
-          try {
-            const parsed = JSON.parse(trimmed);
-            if (parsed.message?.content) {
-              yield parsed.message.content;
-            }
-          } catch (e) {
-            console.error('Ollama stream parse error:', e, line);
-          }
-        }
-      }
-    } finally {
-      reader.releaseLock();
     }
   }
 }

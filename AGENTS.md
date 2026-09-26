@@ -34,6 +34,7 @@ When contributing to this project, adhere to the following rules and design phil
   - `options/`: Contains the Configuration UI. Follows standard entry file conventions (`index.html`, `index.js`, `index.css`).
   - `background/`: Contains the Service Worker (`background.js`) and provider logic (`providers/*.js`). Background script handles API streaming, connection testing, and MCP tool-calling (`tools.js`).
   - `content/`: Contains content scripts (`content.js`) for extracting webpage context.
+- **Auto-Scrolling:** When streaming text in the chat UI, implement "Smart Scrolling": only auto-scroll (`scrollTop = scrollHeight`) if the user is already near the bottom (within a ~150px threshold). This prevents "jitter" and dizziness if the user tries to scroll up while the model is generating.
 - **Toasts:** Prevent toast notifications from stacking on top of each other. The UI should automatically clear any existing toasts before displaying a new one.
 - **MCP Integration:** When adding tools or capabilities, use the dynamic Model Context Protocol (MCP) tool registry via `tools.js`. Ensure MCP configurations are stored as JSON in `vault.js`.
 - **Gemini API Quirks:** The Gemini REST API is extremely strict. 

@@ -55,5 +55,23 @@ export const vault = {
    */
   async setActiveModel(providerId, modelId) {
     await chrome.storage.local.set({ activeModel: { providerId, modelId } });
+  },
+
+  async saveSessions(sessions) {
+    await chrome.storage.local.set({ chatSessions: sessions });
+  },
+
+  async getSessions() {
+    const data = await chrome.storage.local.get('chatSessions');
+    return data.chatSessions || [];
+  },
+
+  async saveCurrentSessionId(id) {
+    await chrome.storage.local.set({ currentSessionId: id });
+  },
+
+  async getCurrentSessionId() {
+    const data = await chrome.storage.local.get('currentSessionId');
+    return data.currentSessionId || null;
   }
 };

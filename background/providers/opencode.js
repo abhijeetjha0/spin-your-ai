@@ -29,7 +29,7 @@ export class OpenCodeProvider extends BaseProvider {
     }
   }
 
-  async *chat(modelId, messages, signal) {
+  async *chat(_modelId, messages, signal) {
     const headers = { 'Content-Type': 'application/json' };
     const authHeader = this.getAuthHeader();
     if (authHeader) headers['Authorization'] = authHeader;

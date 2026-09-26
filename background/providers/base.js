@@ -23,7 +23,7 @@ export class BaseProvider {
    * @param {AbortSignal} signal - Used to cancel generation
    * @returns {AsyncGenerator<string>}
    */
-  async *chat(modelId, messages, signal) {
+  async *chat(_modelId, _messages, _signal) {
     throw new Error('chat() not implemented for provider ' + this.id);
   }
   

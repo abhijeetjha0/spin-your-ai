@@ -19,7 +19,7 @@ export class OpenClawProvider extends BaseProvider {
     }
   }
 
-  async *chat(modelId, messages, signal) {
+  async *chat(_modelId, messages, signal) {
     const prompt = messages[messages.length - 1].content;
     const res = await fetch(`${this.baseUrl}/chat`, {
       method: 'POST',

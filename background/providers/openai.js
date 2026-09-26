@@ -28,7 +28,9 @@ export class OpenAIProvider extends BaseProvider {
   }
 
   async *chat(modelId, messages, signal) {
-    if (!this.apiKey) throw new Error('OpenAI API Key is not configured.');
+    if (this.config.apiKeyRequired !== false && !this.apiKey) {
+      throw new Error(`${this.config.name || 'OpenAI'} API Key is not configured.`);
+    }
 
     const tools = await getActiveTools();
 
@@ -58,16 +60,18 @@ export class OpenAIProvider extends BaseProvider {
         stream: true
       };
       
-      if (tools.length > 0) {
+      if (this.supportsTools !== false && tools.length > 0) {
         payload.tools = tools;
+      }
+
+      const headers = { 'Content-Type': 'application/json' };
+      if (this.apiKey) {
+        headers['Authorization'] = `Bearer ${this.apiKey}`;
       }
 
       const res = await fetch(`${this.baseUrl}/chat/completions`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.apiKey}`
-        },
+        headers,
         body: JSON.stringify(payload),
         signal
       });
@@ -106,7 +110,9 @@ export class OpenAIProvider extends BaseProvider {
       const toolCalls = Object.values(toolCallsBuffer);
       
       if (toolCalls.length > 0) {
-        yield '\n\n> <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;color:#a78bfa">settings</span> *Executing tool...*\n\n';
+        for (const tc of toolCalls) {
+          yield `\n\n> <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;color:#a78bfa">settings</span> *Executing MCP tool \`${tc.function.name}\`...*\n\n`;
+        }
         
         currentMessages.push({
           role: 'assistant',

@@ -18,7 +18,22 @@ chrome.runtime.onInstalled.addListener(() => {
 
 // Active generation controllers for cancelling
 const activeGenerations = new Map();
-let conversationHistory = [];
+let allSessions = [];
+let currentSessionId = null;
+
+vault.getSessions().then(s => allSessions = s);
+vault.getCurrentSessionId().then(id => currentSessionId = id);
+
+async function getCurrentHistory() {
+  if (!currentSessionId) return [];
+  const s = allSessions.find(s => s.id === currentSessionId);
+  return s ? s.history : [];
+}
+
+async function saveSessions() {
+  await vault.saveSessions(allSessions);
+  await vault.saveCurrentSessionId(currentSessionId);
+}
 
 async function getProviderInstance(providerId, passedConfig = null) {
   const config = passedConfig || await vault.getConfig(providerId);
@@ -40,7 +55,7 @@ async function getProviderInstance(providerId, passedConfig = null) {
 }
 
 // Message handler
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
   if (request.type === 'GET_MODELS') {
     handleGetModels().then(sendResponse);
     return true;
@@ -78,8 +93,40 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
 
   if (request.type === 'CLEAR_HISTORY') {
-    conversationHistory = [];
+    currentSessionId = null;
+    saveSessions();
     sendResponse({ ok: true });
+    return true;
+  }
+
+  if (request.type === 'GET_SESSIONS') {
+    sendResponse({ sessions: allSessions, currentSessionId });
+    return true;
+  }
+
+  if (request.type === 'SWITCH_SESSION') {
+    const { sessionId } = request.payload;
+    if (allSessions.find(s => s.id === sessionId)) {
+      currentSessionId = sessionId;
+      saveSessions();
+    }
+    getCurrentHistory().then(history => sendResponse({ ok: true, history }));
+    return true;
+  }
+
+  if (request.type === 'DELETE_SESSION') {
+    const { sessionId } = request.payload;
+    allSessions = allSessions.filter(s => s.id !== sessionId);
+    if (currentSessionId === sessionId) {
+      currentSessionId = allSessions.length > 0 ? allSessions[0].id : null;
+    }
+    saveSessions();
+    sendResponse({ ok: true });
+    return true;
+  }
+
+  if (request.type === 'GET_HISTORY') {
+    getCurrentHistory().then(history => sendResponse({ history }));
     return true;
   }
 
@@ -90,6 +137,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       activeGenerations.delete(messageId);
     }
     sendResponse({ ok: true });
+    return true;
+  }
+
+  if (request.type === 'EXPORT_CHAT') {
+    getCurrentHistory().then(history => sendResponse({ ok: true, messages: history }));
     return true;
   }
 });
@@ -215,8 +267,11 @@ async function handleSendChat(payload) {
     messages.push({ role: 'system', content: contextStr });
   }
 
+  const rawHistory = await getCurrentHistory();
+
   // Append full conversation history for multi-turn context
-  messages.push(...conversationHistory);
+  const historyForProvider = rawHistory.map(h => ({ role: h.role, content: h.text }));
+  messages.push(...historyForProvider);
   
   // Build the new user message with attachments
   const userMessage = { role: 'user' };
@@ -241,7 +296,21 @@ async function handleSendChat(payload) {
   messages.push(userMessage);
   
   // Track the user message in history (text only for history)
-  conversationHistory.push({ role: 'user', content: text });
+  if (!currentSessionId) {
+    currentSessionId = Date.now().toString();
+    const title = text.trim();
+    allSessions.push({
+      id: currentSessionId,
+      title: title.length > 25 ? title.substring(0, 25) + '...' : title,
+      createdAt: Date.now(),
+      history: []
+    });
+    chrome.runtime.sendMessage({ type: 'UPDATE_SESSIONS', payload: { sessions: allSessions, currentSessionId } }).catch(() => {});
+  }
+
+  const activeHistory = await getCurrentHistory();
+  activeHistory.push({ role: 'user', text, attachments: attachments || [] });
+  saveSessions();
 
   let fullResponse = '';
 
@@ -254,14 +323,20 @@ async function handleSendChat(payload) {
     }
     // Track the AI response in history
     if (fullResponse) {
-      conversationHistory.push({ role: 'assistant', content: fullResponse });
+      const activeHistory = await getCurrentHistory();
+      activeHistory.push({ role: 'assistant', text: fullResponse });
+      saveSessions();
     }
-    emitStreamChunk(messageId, null, true);
   } catch (err) {
     if (err.name !== 'AbortError') {
       emitStreamChunk(messageId, null, true, err.message);
     }
   } finally {
+    if (controller.signal.aborted) {
+      emitStreamChunk(messageId, '\n\n**[Aborted by user]**', true);
+    } else {
+      emitStreamChunk(messageId, null, true);
+    }
     activeGenerations.delete(messageId);
   }
 }

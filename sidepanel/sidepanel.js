@@ -23,6 +23,14 @@ let isGenerating = false;
 let currentMessageId = null;
 let pendingAttachments = [];
 
+const sessionsBtn = document.getElementById('sessions-btn');
+const sessionsModal = document.getElementById('sessions-modal');
+const closeSessionsBtn = document.getElementById('close-sessions-btn');
+const sessionsList = document.getElementById('sessions-list');
+
+let allSessions = [];
+let currentSessionId = null;
+
 // Combobox state
 let allModels = [];         // [{providerId, providerName, modelId, modelName}]
 let selectedModelValue = null; // 'providerId::modelId'
@@ -38,6 +46,19 @@ async function init() {
   const helpBtn = document.getElementById('help-btn');
   helpBtn.addEventListener('click', () => {
     chrome.tabs.create({ url: chrome.runtime.getURL('help/index.html') });
+  });
+
+  const exportChatBtn = document.getElementById('export-chat-btn');
+  exportChatBtn.addEventListener('click', exportChat);
+
+  const reloadModelsBtn = document.getElementById('reload-models-btn');
+  reloadModelsBtn.addEventListener('click', () => {
+    loadProviders();
+    const icon = reloadModelsBtn.querySelector('.material-symbols-outlined');
+    if (icon) {
+      icon.style.animation = 'spin 1s linear infinite';
+      setTimeout(() => icon.style.animation = '', 1000);
+    }
   });
 
   newChatBtn.addEventListener('click', clearChat);
@@ -66,16 +87,54 @@ async function init() {
         type: 'STOP_GENERATION', 
         payload: { messageId: currentMessageId } 
       });
-      finishGeneration();
+      // Do not call finishGeneration() here.
+      // Wait for background worker to abort and send the final chunk.
     }
   });
 
+  // Setup sessions modal
+  sessionsBtn.addEventListener('click', () => {
+    sessionsModal.classList.remove('hidden');
+    chrome.runtime.sendMessage({ type: 'GET_SESSIONS' }).then(res => {
+      if (res) {
+        allSessions = res.sessions || [];
+        currentSessionId = res.currentSessionId;
+        renderSessionsList();
+      }
+    });
+  });
+
+  closeSessionsBtn.addEventListener('click', () => {
+    sessionsModal.classList.add('hidden');
+  });
+
+  sessionsModal.addEventListener('click', (e) => {
+    if (e.target === sessionsModal) {
+      sessionsModal.classList.add('hidden');
+    }
+  });
+
+  // Restore history and sessions
+  chrome.runtime.sendMessage({ type: 'GET_SESSIONS' }).then(res => {
+    if (res) {
+      allSessions = res.sessions || [];
+      currentSessionId = res.currentSessionId;
+    }
+    chrome.runtime.sendMessage({ type: 'GET_HISTORY' }).then(h => {
+      if (h && h.history) renderHistory(h.history);
+    });
+  });
+
   // Listen for active model changes and stream chunks
-  chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  chrome.runtime.onMessage.addListener((msg, _sender, _sendResponse) => {
     if (msg.type === 'CHAT_STREAM' && msg.payload.messageId === currentMessageId) {
       handleStreamChunk(msg.payload.chunk, msg.payload.done, msg.payload.error);
     } else if (msg.type === 'PROVIDERS_UPDATED') {
       loadProviders();
+    } else if (msg.type === 'UPDATE_SESSIONS') {
+      allSessions = msg.payload.sessions || [];
+      currentSessionId = msg.payload.currentSessionId;
+      renderSessionsList();
     }
   });
 }
@@ -197,7 +256,7 @@ modelSearch.addEventListener('keydown', (e) => {
 });
 
 document.addEventListener('click', (e) => {
-  if (!modelCombobox.contains(e.target)) closeDropdown();
+  if (modelCombobox && !modelCombobox.contains(e.target)) closeDropdown();
 });
 
 async function sendMessage() {
@@ -322,7 +381,7 @@ async function sendMessage() {
   });
 }
 
-function appendMessage(sender, text, className, id = null) {
+function appendMessage(_sender, text, className, id = null) {
   const div = document.createElement('div');
   div.className = `message ${className}`;
   if (id) div.id = `msg-${id}`;
@@ -330,6 +389,41 @@ function appendMessage(sender, text, className, id = null) {
   chatContainer.appendChild(div);
   chatContainer.scrollTop = chatContainer.scrollHeight;
   return div;
+}
+
+function renderHistory(history) {
+  if (!history || history.length === 0) {
+    chatContainer.innerHTML = '<div class="message system-msg">Welcome to Spin Your AI! Select a model and start chatting.</div>';
+    return;
+  }
+
+  chatContainer.innerHTML = '';
+  for (const item of history) {
+    if (item.role === 'user') {
+      let userMsgHtml = '';
+      if (item.attachments && item.attachments.length > 0) {
+        userMsgHtml += '<div class="msg-attachments">';
+        for (const att of item.attachments) {
+          if (att.type.startsWith('image/')) {
+            userMsgHtml += `<img src="data:${att.type};base64,${att.data}" alt="${att.name}">`;
+          } else {
+            const icon = getFileIcon(att.type);
+            userMsgHtml += `<span class="file-badge"><span class="material-symbols-outlined">${icon}</span> ${att.name}</span>`;
+          }
+        }
+        userMsgHtml += '</div>';
+      }
+      userMsgHtml += renderMarkdown(item.text);
+      const userEl = appendMessage('You', '', 'user-msg');
+      userEl.innerHTML = userMsgHtml;
+    } else if (item.role === 'assistant') {
+      const aiEl = appendMessage('AI', item.text, 'ai-msg');
+      aiEl.innerHTML = renderMarkdown(item.text);
+    } else {
+      appendMessage('System', item.text, 'system-msg');
+    }
+  }
+  chatContainer.scrollTop = chatContainer.scrollHeight;
 }
 
 let currentAiText = '';
@@ -358,7 +452,13 @@ function handleStreamChunk(chunk, done, error) {
     }
     currentAiText += chunk;
     msgEl.innerHTML = renderMarkdown(currentAiText);
-    chatContainer.scrollTop = chatContainer.scrollHeight;
+    
+    // Smart scroll: only auto-scroll if user is near the bottom
+    const threshold = 150;
+    const isNearBottom = chatContainer.scrollHeight - chatContainer.clientHeight - chatContainer.scrollTop < threshold;
+    if (isNearBottom) {
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+    }
   }
 
   if (done) {
@@ -461,6 +561,95 @@ function getFileIcon(mimeType) {
   if (mimeType.startsWith('text/html')) return 'html';
   if (mimeType.startsWith('text/css')) return 'css';
   return 'draft';
+}
+
+async function exportChat() {
+  const res = await chrome.runtime.sendMessage({ type: 'EXPORT_CHAT' });
+  if (!res || !res.ok || !res.messages || res.messages.length === 0) {
+    showToast('No chat history to export.');
+    return;
+  }
+
+  const exportData = {
+    metadata: {
+      format: 'openai_messages',
+      version: '1.0',
+      exported_at: new Date().toISOString(),
+      source: 'spin-your-ai-chrome',
+      message_count: res.messages.length
+    },
+    messages: res.messages
+  };
+
+  const json = JSON.stringify(exportData, null, 2);
+  const blob = new Blob([json], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `chat_export_${Date.now()}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function renderSessionsList() {
+  if (!sessionsList) return;
+  sessionsList.innerHTML = '';
+  if (allSessions.length === 0) {
+    sessionsList.innerHTML = '<div style="padding: 10px; color: var(--text-muted);">No sessions yet</div>';
+    return;
+  }
+  
+  // Sort by createdAt desc
+  const sorted = [...allSessions].sort((a, b) => b.createdAt - a.createdAt);
+  
+  sorted.forEach(session => {
+    const item = document.createElement('div');
+    item.className = 'model-item' + (session.id === currentSessionId ? ' selected' : '');
+    item.style = 'display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; cursor: pointer;';
+    
+    const titleSpan = document.createElement('span');
+    titleSpan.textContent = session.title || 'Chat Session';
+    titleSpan.style = 'flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-right: 10px;';
+    
+    item.appendChild(titleSpan);
+    
+    const deleteBtn = document.createElement('span');
+    deleteBtn.className = 'material-symbols-outlined';
+    deleteBtn.textContent = 'delete';
+    deleteBtn.style = 'font-size: 16px; cursor: pointer; color: var(--text-muted); padding: 2px; border-radius: 4px;';
+    deleteBtn.title = 'Delete Session';
+    
+    deleteBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      chrome.runtime.sendMessage({ type: 'DELETE_SESSION', payload: { sessionId: session.id } }).then(() => {
+        allSessions = allSessions.filter(s => s.id !== session.id);
+        if (currentSessionId === session.id) {
+            currentSessionId = allSessions.length > 0 ? allSessions[0].id : null;
+        }
+        renderSessionsList();
+        chrome.runtime.sendMessage({ type: 'GET_HISTORY' }).then(h => renderHistory(h ? h.history : []));
+      });
+    });
+    
+    deleteBtn.addEventListener('mouseenter', () => deleteBtn.style.color = '#ff4444');
+    deleteBtn.addEventListener('mouseleave', () => deleteBtn.style.color = 'var(--text-muted)');
+    
+    item.appendChild(deleteBtn);
+    
+    item.addEventListener('click', () => {
+      chrome.runtime.sendMessage({ type: 'SWITCH_SESSION', payload: { sessionId: session.id } }).then(res => {
+        if (res && res.history) {
+          currentSessionId = session.id;
+          renderHistory(res.history);
+          sessionsModal.classList.add('hidden');
+        }
+      });
+    });
+    
+    sessionsList.appendChild(item);
+  });
 }
 
 document.addEventListener('DOMContentLoaded', init);

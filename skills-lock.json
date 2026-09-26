@@ -1,11 +1,17 @@
 {
   "version": 1,
   "skills": {
+    "cross-browser-extension-builder": {
+      "source": "abhijeetjha0/ai",
+      "sourceType": "github",
+      "skillPath": "skills/cross-browser-extension-builder/SKILL.md",
+      "computedHash": "05161a97b1052321fa9c2d635e612b1bf8fc39036e0ac8a241e85767d6970235"
+    },
     "duplicate-code-resolver": {
       "source": "abhijeetjha0/ai",
       "sourceType": "github",
       "skillPath": "skills/duplicate-code-resolver/SKILL.md",
-      "computedHash": "e95a9f0c998a0a950608b30bc9227fa0fb697ef14587e371a587e11acd565701"
+      "computedHash": "1adeb176e3ac9e6f22ed42cde69161ca7f97186cda9128a24593745df64d6b63"
     },
     "feature-implementation-planner": {
       "source": "abhijeetjha0/ai",
@@ -19,11 +25,23 @@
       "skillPath": "skills/generate-ui-manual/SKILL.md",
       "computedHash": "e515245089546407da2a70db5eb4b27f9b0fbea4b6c7af974a2bef2c28372314"
     },
+    "modular-agents-generator": {
+      "source": "abhijeetjha0/ai",
+      "sourceType": "github",
+      "skillPath": "skills/modular-agents-generator/SKILL.md",
+      "computedHash": "c73b70317609a1582a76d645086f4a6474a18f3b7f77bab3332335d65a868647"
+    },
     "multi-agent-skill": {
       "source": "abhijeetjha0/ai",
       "sourceType": "github",
       "skillPath": "skills/multi-agent-skill/SKILL.md",
       "computedHash": "3ac171073b2ab6f92e693480d6a7d3a4a9afd346bd6b51e44a309deee6bc2cf4"
+    },
+    "project-explainer": {
+      "source": "abhijeetjha0/ai",
+      "sourceType": "github",
+      "skillPath": "skills/project-explainer/SKILL.md",
+      "computedHash": "d852a69de40ae4ad9fad0ec2aeb8de2a60a37e06f14347cb29ebda33dced9df7"
     },
     "test-case-and-coverage-enhancer": {
       "source": "abhijeetjha0/ai",

@@ -9,6 +9,9 @@
 <body>
   <div class="app-container">
     <header class="header glassmorphism">
+      <div class="header-left" style="margin-right: 12px; display: flex; align-items: center;">
+        <button id="sessions-btn" class="icon-btn" title="Chat History"><span class="material-symbols-outlined">history</span></button>
+      </div>
       <div class="model-combobox" id="model-combobox">
         <div class="model-combobox-trigger" id="model-trigger">
           <span class="material-symbols-outlined combobox-icon">smart_toy</span>
@@ -24,7 +27,9 @@
         </div>
       </div>
       <div class="header-actions">
-        <button id="new-chat-btn" class="icon-btn" title="New Chat"><span class="material-symbols-outlined">delete</span></button>
+        <button id="reload-models-btn" class="icon-btn" title="Reload Models"><span class="material-symbols-outlined">refresh</span></button>
+        <button id="export-chat-btn" class="icon-btn" title="Export Chat"><span class="material-symbols-outlined">download</span></button>
+        <button id="new-chat-btn" class="icon-btn" title="New Chat"><span class="material-symbols-outlined">add</span></button>
         <button id="help-btn" class="icon-btn" title="Help"><span class="material-symbols-outlined">help</span></button>
         <button id="options-btn" class="icon-btn" title="Settings"><span class="material-symbols-outlined">settings</span></button>
       </div>
@@ -60,6 +65,17 @@
       </div>
     </footer>
   </div>
+
+  <div id="sessions-modal" class="modal hidden">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 style="font-size: 16px; color: var(--text-main);">Chat History</h2>
+        <button id="close-sessions-btn" class="icon-btn"><span class="material-symbols-outlined">close</span></button>
+      </div>
+      <div id="sessions-list" class="modal-body model-list" style="max-height: 400px; overflow-y: auto;"></div>
+    </div>
+  </div>
+
   <script type="module" src="sidepanel.js"></script>
 </body>
 </html>
