@@ -19,10 +19,20 @@ export class OpenCodeProvider extends BaseProvider {
       const authHeader = this.getAuthHeader();
       if (authHeader) headers['Authorization'] = authHeader;
       
-      const res = await fetch(`${this.baseUrl}/api/health`, { headers });
+      const res = await fetch(`${this.baseUrl}/api/model`, { headers });
       if (!res.ok) throw new Error('OpenCode not running');
       
-      return [{ id: 'opencode-default', name: 'OpenCode Session' }];
+      const data = await res.json();
+      const models = data?.data || [];
+      
+      if (models.length === 0) {
+        return [{ id: 'default', name: 'OpenCode Default Model' }];
+      }
+
+      return models.map(m => ({
+        id: `${m.providerID}::${m.id}`,
+        name: `${m.providerID} / ${m.id}`
+      }));
     } catch (e) {
       console.warn('OpenCode error:', e);
       return [];
@@ -34,8 +44,6 @@ export class OpenCodeProvider extends BaseProvider {
     const authHeader = this.getAuthHeader();
     if (authHeader) headers['Authorization'] = authHeader;
 
-    // OpenCode's API only accepts a single 'message' string.
-    // If there is a system message (like page context), we must prepend it to the user prompt.
     let fullPrompt = '';
     const systemMsg = messages.find(m => m.role === 'system');
     if (systemMsg) {
@@ -44,18 +52,34 @@ export class OpenCodeProvider extends BaseProvider {
     const userMsg = messages.filter(m => m.role === 'user').pop();
     fullPrompt += userMsg ? userMsg.content : '';
 
-    const res = await fetch(`${this.baseUrl}/api/chat`, {
+    let modelRef = null;
+    try {
+      if (_modelId && _modelId !== 'default') {
+        const parts = _modelId.split('::');
+        if (parts.length === 2) {
+          modelRef = { providerID: parts[0], id: parts[1] };
+        }
+      }
+    } catch (e) {
+      // ignore
+    }
+
+    const res = await fetch(`${this.baseUrl}/api/experimental/generate`, {
       method: 'POST',
       headers,
-      body: JSON.stringify({ message: fullPrompt }),
+      body: JSON.stringify({ 
+        prompt: fullPrompt,
+        ...(modelRef && { model: modelRef })
+      }),
       signal
     });
 
     if (!res.ok) {
-      throw new Error(`OpenCode Error: ${res.status}`);
+      const errorText = await res.text().catch(() => '');
+      throw new Error(`OpenCode Error: ${res.status} ${errorText}`);
     }
     
-    const text = await res.text();
-    yield text;
+    const data = await res.json();
+    yield data?.data?.text || '';
   }
 }

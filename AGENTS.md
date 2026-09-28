@@ -1,6 +1,6 @@
 # Spin Your AI - Agent Rules & Guidelines
 
-Welcome to **Spin Your AI**, a Chrome Extension (Manifest V3) designed to spin up AI models directly from the browser sidebar, supporting a wide range of cloud and local providers (OpenAI, Anthropic, Gemini, OpenRouter, OpenCode, MCP, etc.) with multimodality and page context awareness.
+Welcome to **Spin Your AI**, a Chrome Extension (Manifest V3) designed to spin up AI models directly from the browser sidebar, supporting a wide range of cloud and local providers (OpenAI, Anthropic, Gemini, OpenRouter, OpenCode, OpenCode Zen, MCP, etc.) with multimodality and page context awareness.
 
 When contributing to this project, adhere to the following rules and design philosophies established by the user.
 

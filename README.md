@@ -14,7 +14,7 @@ A Manifest V3 Chrome Extension that lets you spin up AI models directly from you
 - **Local:** Ollama, Hermes Desktop (Nous Research)
 - **Cloud:** OpenAI, Anthropic (Claude), Google Gemini, Ollama Cloud
 - **Aggregators:** OpenRouter, OpenCode Zen
-- **Dev Platforms:** OpenCode
+- **Dev Platforms:** OpenCode (with Basic Auth support)
 - **MCP Servers:** Full support for any HTTP-based Model Context Protocol (MCP) server.
 
 ## Configuration
