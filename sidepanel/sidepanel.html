@@ -64,6 +64,26 @@
         </button>
       </div>
     </footer>
+
+  <!-- Agent action confirmation banner (shown before destructive actions) -->
+  <div id="agent-confirm-banner" class="agent-confirm-banner hidden">
+    <div class="agent-confirm-header">
+      <span class="material-symbols-outlined" style="color:#a78bfa;font-size:18px;">smart_toy</span>
+      <span class="agent-confirm-title">AGENT ACTION REQUESTED</span>
+    </div>
+    <div class="agent-confirm-body">
+      <span class="agent-confirm-tool" id="agent-confirm-tool-name"></span>
+      <pre class="agent-confirm-args" id="agent-confirm-args"></pre>
+    </div>
+    <div class="agent-confirm-actions">
+      <button id="agent-allow-btn" class="agent-btn agent-btn-allow">
+        <span class="material-symbols-outlined">check</span> ALLOW
+      </button>
+      <button id="agent-deny-btn" class="agent-btn agent-btn-deny">
+        <span class="material-symbols-outlined">block</span> DENY
+      </button>
+    </div>
+  </div>
   </div>
 
   <div id="sessions-modal" class="modal hidden">

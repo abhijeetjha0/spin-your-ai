@@ -1,4 +1,7 @@
 import { vault } from './vault.js';
+import { BROWSER_AGENT_TOOLS, executeAgentTool, resolveConfirmation } from './agent_tools.js';
+
+export { resolveConfirmation };
 
 /**
  * Executes a tool based on the name and arguments provided by the LLM.
@@ -6,7 +9,12 @@ import { vault } from './vault.js';
  * @param {object} args 
  * @returns {Promise<any>}
  */
-export async function executeTool(toolName, args) {
+export async function executeTool(toolName, args, frozenTabId) {
+  // Built-in browser agent tools
+  if (toolName.startsWith('browser_')) {
+    return await executeAgentTool(toolName, args, frozenTabId);
+  }
+
   if (toolName.startsWith('mcp_')) {
     // Tool name format: mcp_serverKey__originalToolName
     const parts = toolName.split('__');
@@ -164,6 +172,9 @@ export async function getActiveTools() {
   } catch (e) {
     console.error('MCP getActiveTools JSON parsing error:', e);
   }
+
+  // Append built-in browser agent tools
+  tools.push(...BROWSER_AGENT_TOOLS);
 
   return tools;
 }

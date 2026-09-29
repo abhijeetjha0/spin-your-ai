@@ -491,3 +491,105 @@ body {
     transform: rotate(360deg);
   }
 }
+
+/* ── Agent Confirmation Banner ───────────────────────────────────── */
+.agent-confirm-banner {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 200;
+  background: var(--panel-bg);
+  border-top: 2px solid #a78bfa;
+  padding: 10px 14px 12px;
+  font-family: var(--font-mono);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.agent-confirm-banner.hidden {
+  display: none;
+}
+
+.agent-confirm-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.agent-confirm-title {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  color: #a78bfa;
+  font-weight: bold;
+}
+
+.agent-confirm-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.agent-confirm-tool {
+  font-size: 12px;
+  color: #7dd3fc;
+}
+
+.agent-confirm-args {
+  background: #000;
+  border: 1px solid var(--border-color);
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 6px 8px;
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 80px;
+  overflow-y: auto;
+}
+
+.agent-confirm-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.agent-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 14px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: bold;
+  letter-spacing: 0.08em;
+  border: 1px solid var(--border-color);
+  cursor: pointer;
+  background: #000;
+  color: var(--text-main);
+  border-radius: 0;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.agent-btn .material-symbols-outlined {
+  font-size: 15px;
+}
+
+.agent-btn-allow {
+  border-color: #4ade80;
+  color: #4ade80;
+}
+
+.agent-btn-allow:hover {
+  background: #4ade8022;
+}
+
+.agent-btn-deny {
+  border-color: #ef4444;
+  color: #ef4444;
+}
+
+.agent-btn-deny:hover {
+  background: #ef444422;
+}

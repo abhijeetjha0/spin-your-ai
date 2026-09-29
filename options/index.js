@@ -46,7 +46,7 @@ const PROVIDERS = [
             key: 'configJson', 
             label: 'mcp_config.json <span class="material-symbols-outlined" title="Only HTTP/SSE MCP endpoints are supported. Configure your servers as a JSON object. Use env to pass HTTP headers." style="font-size: 16px; cursor: help;">info</span>', 
             type: 'textarea', 
-            placeholder: '{\n  "mcpServers": {\n    "n8n-mcp": {\n      "type": "http",\n      "url": "http://localhost:5678/mcp-server/http",\n      "headers": {\n        "Authorization": "Bearer YOUR_ACCESS_TOKEN_HERE"\n      }\n    }\n  }\n}' 
+            placeholder: '{\n  "mcpServers": {\n  }\n}' 
           }
         ]
       }

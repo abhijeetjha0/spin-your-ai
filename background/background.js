@@ -10,6 +10,7 @@ import { OpenCodeProvider } from './providers/opencode.js';
 import { OpenClawProvider } from './providers/openclaw.js';
 import { HermesProvider } from './providers/hermes.js';
 import { HuggingFaceProvider } from './providers/huggingface.js';
+import { resolveConfirmation } from './tools.js';
 
 // Setup side panel behavior to open on action click
 chrome.runtime.onInstalled.addListener(() => {
@@ -144,6 +145,14 @@ chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
     getCurrentHistory().then(history => sendResponse({ ok: true, messages: history }));
     return true;
   }
+
+  if (request.type === 'AGENT_ACTION_RESPONSE') {
+    // User approved or denied a destructive agent action from the sidepanel
+    const { requestId, approved } = request.payload;
+    resolveConfirmation(requestId, approved);
+    sendResponse({ ok: true });
+    return true;
+  }
 });
 
 async function handleMCPTest(config) {
@@ -246,7 +255,7 @@ async function handleGetModels() {
 }
 
 async function handleSendChat(payload) {
-  const { messageId, providerId, modelId, text, pageContext, attachments } = payload;
+  const { messageId, providerId, modelId, text, pageContext, attachments, frozenTabId } = payload;
   const provider = await getProviderInstance(providerId);
   if (!provider) {
     emitStreamChunk(messageId, null, true, 'Provider not configured.');
@@ -255,6 +264,18 @@ async function handleSendChat(payload) {
 
   const controller = new AbortController();
   activeGenerations.set(messageId, controller);
+
+  // Freeze the active tab at the moment the user sends the message.
+  // Agent actions will always target this tab, even if the user switches tabs.
+  let resolvedTabId = frozenTabId;
+  if (!resolvedTabId) {
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+      if (tab && !tab.url?.startsWith('chrome://') && !tab.url?.startsWith('chrome-extension://')) {
+        resolvedTabId = tab.id;
+      }
+    } catch (_) {}
+  }
   
   // Build messages array: system context + full conversation history + new user message
   const messages = [];
@@ -315,11 +336,11 @@ async function handleSendChat(payload) {
   let fullResponse = '';
 
   try {
-    const generator = provider.chat(modelId, messages, controller.signal);
+    const generator = provider.chat(modelId, messages, controller.signal, resolvedTabId);
     for await (const chunk of generator) {
       if (controller.signal.aborted) break;
       fullResponse += chunk;
-      emitStreamChunk(messageId, chunk, false);
+      emitStreamChunk(messageId, chunk, false, null, null);
     }
     // Track the AI response in history
     if (fullResponse) {

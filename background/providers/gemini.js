@@ -33,7 +33,7 @@ export class GeminiProvider extends BaseProvider {
     }
   }
 
-  async *chat(modelId, messages, signal) {
+  async *chat(modelId, messages, signal, frozenTabId) {
     if (!this.apiKey) throw new Error('Gemini API Key is not configured.');
 
     const mcpTools = await getActiveTools();
@@ -152,8 +152,8 @@ export class GeminiProvider extends BaseProvider {
 
       if (toolCallsBuffer.length > 0) {
         toolCallCount++;
-        if (toolCallCount > 5) {
-          throw new Error('Too many sequential tool calls. The model is stuck in a loop.');
+        if (toolCallCount > 50) {
+          throw new Error('Too many sequential tool calls (>50). The model may be stuck in a loop.');
         }
 
         // Append the model's exact generated parts to our history
@@ -164,9 +164,9 @@ export class GeminiProvider extends BaseProvider {
 
         const functionResponses = [];
         for (const tc of toolCallsBuffer) {
-           yield `\n\n> <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;color:#a78bfa">settings</span> *Executing MCP tool \`${tc.name}\`...*\n\n`;
+           yield `\n\n> <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;color:#a78bfa">settings</span> *Executing tool \`${tc.name}\`...*\n\n`;
            try {
-             const result = await executeTool(tc.name, tc.args);
+             const result = await executeTool(tc.name, tc.args, frozenTabId);
              functionResponses.push({
                functionResponse: {
                  name: tc.name,

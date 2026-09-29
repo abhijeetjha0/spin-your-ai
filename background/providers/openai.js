@@ -27,7 +27,7 @@ export class OpenAIProvider extends BaseProvider {
     }
   }
 
-  async *chat(modelId, messages, signal) {
+  async *chat(modelId, messages, signal, frozenTabId) {
     if (this.config.apiKeyRequired !== false && !this.apiKey) {
       throw new Error(`${this.config.name || 'OpenAI'} API Key is not configured.`);
     }
@@ -111,7 +111,7 @@ export class OpenAIProvider extends BaseProvider {
       
       if (toolCalls.length > 0) {
         for (const tc of toolCalls) {
-          yield `\n\n> <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;color:#a78bfa">settings</span> *Executing MCP tool \`${tc.function.name}\`...*\n\n`;
+          yield `\n\n> <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;color:#a78bfa">settings</span> *Executing tool \`${tc.function.name}\`...*\n\n`;
         }
         
         currentMessages.push({
@@ -123,7 +123,7 @@ export class OpenAIProvider extends BaseProvider {
         for (const tc of toolCalls) {
           try {
             const args = JSON.parse(tc.function.arguments);
-            const result = await executeTool(tc.function.name, args);
+            const result = await executeTool(tc.function.name, args, frozenTabId);
             currentMessages.push({
               role: 'tool',
               tool_call_id: tc.id,

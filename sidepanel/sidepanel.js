@@ -11,6 +11,14 @@ const attachBtn = document.getElementById('attach-btn');
 const fileInput = document.getElementById('file-input');
 const attachmentPreview = document.getElementById('attachment-preview');
 
+// Agent confirmation banner
+const agentConfirmBanner = document.getElementById('agent-confirm-banner');
+const agentConfirmToolName = document.getElementById('agent-confirm-tool-name');
+const agentConfirmArgs = document.getElementById('agent-confirm-args');
+const agentAllowBtn = document.getElementById('agent-allow-btn');
+const agentDenyBtn = document.getElementById('agent-deny-btn');
+let pendingAgentRequestId = null;
+
 // Combobox elements
 const modelCombobox = document.getElementById('model-combobox');
 const modelTrigger = document.getElementById('model-trigger');
@@ -125,7 +133,7 @@ async function init() {
     });
   });
 
-  // Listen for active model changes and stream chunks
+  // Listen for active model changes, stream chunks, session updates, and agent confirmations
   chrome.runtime.onMessage.addListener((msg, _sender, _sendResponse) => {
     if (msg.type === 'CHAT_STREAM' && msg.payload.messageId === currentMessageId) {
       handleStreamChunk(msg.payload.chunk, msg.payload.done, msg.payload.error);
@@ -135,6 +143,8 @@ async function init() {
       allSessions = msg.payload.sessions || [];
       currentSessionId = msg.payload.currentSessionId;
       renderSessionsList();
+    } else if (msg.type === 'AGENT_CONFIRM_ACTION') {
+      showAgentConfirmBanner(msg.payload);
     }
   });
 }
@@ -651,5 +661,39 @@ function renderSessionsList() {
     sessionsList.appendChild(item);
   });
 }
+
+// ── Agent Confirmation Banner ─────────────────────────────────────
+
+function showAgentConfirmBanner({ requestId, toolName, args }) {
+  pendingAgentRequestId = requestId;
+  agentConfirmToolName.textContent = toolName;
+  agentConfirmArgs.textContent = JSON.stringify(args, null, 2);
+  agentConfirmBanner.classList.remove('hidden');
+}
+
+function hideAgentConfirmBanner() {
+  agentConfirmBanner.classList.add('hidden');
+  agentConfirmToolName.textContent = '';
+  agentConfirmArgs.textContent = '';
+  pendingAgentRequestId = null;
+}
+
+agentAllowBtn.addEventListener('click', () => {
+  if (!pendingAgentRequestId) return;
+  chrome.runtime.sendMessage({
+    type: 'AGENT_ACTION_RESPONSE',
+    payload: { requestId: pendingAgentRequestId, approved: true }
+  });
+  hideAgentConfirmBanner();
+});
+
+agentDenyBtn.addEventListener('click', () => {
+  if (!pendingAgentRequestId) return;
+  chrome.runtime.sendMessage({
+    type: 'AGENT_ACTION_RESPONSE',
+    payload: { requestId: pendingAgentRequestId, approved: false }
+  });
+  hideAgentConfirmBanner();
+});
 
 document.addEventListener('DOMContentLoaded', init);

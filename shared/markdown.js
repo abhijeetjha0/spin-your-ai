@@ -36,9 +36,9 @@ export function renderMarkdown(text) {
       return '';
   });
 
-  // 3. Extract MCP Tool logs
-  text = text.replace(/(?:\n\n)?>\s*<span[^>]*>settings<\/span>\s*\*Executing MCP tool `([^`]+)`\.\.\.\*(?:\n\n)?/gi, (_match, toolName) => {
-      midProcessItems.push(`<div style="margin-bottom: 4px;"><span class="material-symbols-outlined" style="font-size:14px;vertical-align:middle;margin-right:4px;">build</span>Executing MCP Tool: <code>${toolName}</code></div>`);
+  // 3. Extract MCP/Agent Tool logs
+  text = text.replace(/(?:\n\n)?>\s*<span[^>]*>settings<\/span>\s*\*Executing (?:MCP )?tool `([^`]+)`\.\.\.\*(?:\n\n)?/gi, (_match, toolName) => {
+      midProcessItems.push(`<div style="margin-bottom: 4px;"><span class="material-symbols-outlined" style="font-size:14px;vertical-align:middle;margin-right:4px;">build</span>Executing Tool: <code>${toolName}</code></div>`);
       return '';
   });
 
