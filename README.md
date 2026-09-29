@@ -8,6 +8,7 @@ A Manifest V3 Chrome Extension that lets you spin up AI models directly from you
 - **Full Configuration:** Manage all your providers and API keys through a dedicated options page.
 - **100% Privacy:** Your API keys are stored in `chrome.storage.local` and never leave your device.
 - **Provider Auto-Discovery:** Automatically detects local agent frameworks like OpenClaw and Hermes Desktop.
+- **Browser Automation Agent:** The AI can autonomously navigate, click, scroll, and batch-fill forms on your behalf using native DOM integration, effectively acting as an autonomous browser agent. Destructive actions (like clicking or navigating) feature user-confirmation guards.
 
 ## Supported Providers
 
