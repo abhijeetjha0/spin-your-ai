@@ -9,11 +9,16 @@
  * - Errors are reported to the user; no auto-retry.
  */
 
+import { vault } from './vault.js';
+
 // Actions that require user confirmation before executing
 const DESTRUCTIVE_ACTIONS = new Set(['click', 'select', 'drag_drop', 'navigate']);
 
 // Pending confirmation promises keyed by a unique request ID
 const pendingConfirmations = new Map();
+
+// Pending permission mode selection promises keyed by request ID
+const pendingModeResolvers = new Map();
 
 /**
  * Tool definitions (JSON Schema) to inject into the LLM alongside MCP tools.
@@ -186,13 +191,32 @@ export async function executeAgentTool(toolName, args, frozenTabId) {
     return { ok: false, error: 'Cannot perform browser actions on internal Chrome pages.' };
   }
 
-  // Destructive actions require user confirmation
-  if (DESTRUCTIVE_ACTIONS.has(actionType)) {
-    const allowed = await requestConfirmation(toolName, args);
-    if (!allowed) {
-      return { ok: false, error: 'Action denied by user.' };
+  // Check browser agent permission mode (allow_all, allow_some, allow_none)
+  let { mode: permissionMode, prompted } = await vault.getAgentPermissionMode();
+
+  // If user has not selected permission mode yet, show startup mode prompt
+  if (!prompted) {
+    const chosenMode = await requestModeSelection();
+    if (chosenMode) {
+      permissionMode = chosenMode;
     }
   }
+
+  // 1. Mode: ALLOW_NONE — Block all tool execution
+  if (permissionMode === 'allow_none') {
+    return { ok: false, error: 'Action blocked: Browser Agent Permission Mode is set to "Allow None".' };
+  }
+
+  // 2. Mode: ALLOW_SOME — Destructive actions require user confirmation
+  if (permissionMode === 'allow_some') {
+    if (DESTRUCTIVE_ACTIONS.has(actionType)) {
+      const allowed = await requestConfirmation(toolName, args);
+      if (!allowed) {
+        return { ok: false, error: 'Action denied by user.' };
+      }
+    }
+  }
+  // 3. Mode: ALLOW_ALL — All actions (including destructive ones) execute automatically without confirmation
 
   // Execute navigation directly via background API
   if (actionType === 'navigate') {
@@ -265,3 +289,43 @@ export function resolveConfirmation(requestId, approved) {
     pendingConfirmations.delete(requestId);
   }
 }
+
+/**
+ * Sends a mode selection request to the sidepanel popup window.
+ * Resolves to the selected mode string ('allow_some', 'allow_all', or 'allow_none').
+ */
+function requestModeSelection() {
+  return new Promise((resolve) => {
+    const requestId = `mode_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    pendingModeResolvers.set(requestId, resolve);
+
+    chrome.runtime.sendMessage({
+      type: 'PROMPT_AGENT_MODE',
+      payload: { requestId }
+    }).catch(() => {
+      pendingModeResolvers.delete(requestId);
+      resolve('allow_some');
+    });
+
+    // Auto-fallback to allow_some after 60 seconds if no response
+    setTimeout(() => {
+      if (pendingModeResolvers.has(requestId)) {
+        pendingModeResolvers.delete(requestId);
+        resolve('allow_some');
+      }
+    }, 60000);
+  });
+}
+
+/**
+ * Called by background.js when user confirms their agent permission mode in the popup window.
+ * @param {string} requestId
+ * @param {string} mode
+ */
+export function resolveModeSelection(requestId, mode) {
+  if (pendingModeResolvers.has(requestId)) {
+    pendingModeResolvers.get(requestId)(mode);
+    pendingModeResolvers.delete(requestId);
+  }
+}
+

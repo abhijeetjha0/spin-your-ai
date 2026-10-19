@@ -9,6 +9,7 @@ A Manifest V3 Chrome Extension that lets you spin up AI models directly from you
 - **100% Privacy:** Your API keys are stored in `chrome.storage.local` and never leave your device.
 - **Provider Auto-Discovery:** Automatically detects local agent frameworks like OpenClaw and Hermes Desktop.
 - **Browser Automation Agent:** The AI can autonomously navigate, click, scroll, and batch-fill forms on your behalf using native DOM integration, effectively acting as an autonomous browser agent. Destructive actions (like clicking or navigating) feature user-confirmation guards.
+- **Chat & Context Compaction:** Condense verbose earlier turns into an executive summary on demand or automatically, slashing token consumption and latency just like Claude, Gemini, and ChatGPT.
 
 ## Supported Providers
 
@@ -38,7 +39,7 @@ Set the `OLLAMA_ORIGINS` environment variable to `*` in your system environment 
 
 ### Model Context Protocol (MCP)
 Spin Your AI fully supports Tool Calling (Agentic mode) via the Model Context Protocol (MCP). 
-When using capable models (e.g., **OpenAI**, **Gemini**), the model will autonomously discover and execute tools from your MCP servers directly in the browser! Note: **Ollama** local tool calling is not yet implemented.
+When using capable models (e.g., **OpenAI**, **Gemini**, **Ollama Cloud**), the model will autonomously discover and execute tools from your MCP servers directly in the browser! Note: **Ollama** local tool calling is not yet implemented.
 
 Currently, only **HTTP/SSE based MCP Servers** (like the n8n MCP Server) are supported natively in the browser without a messaging host. The extension strictly requires the server to support `text/event-stream` for tool execution responses.
 

@@ -73,5 +73,20 @@ export const vault = {
   async getCurrentSessionId() {
     const data = await chrome.storage.local.get('currentSessionId');
     return data.currentSessionId || null;
+  },
+
+  async getAgentPermissionMode() {
+    const data = await chrome.storage.local.get(['agentPermissionMode', 'agentPermissionModePrompted']);
+    return {
+      mode: data.agentPermissionMode || 'allow_some',
+      prompted: !!data.agentPermissionModePrompted
+    };
+  },
+
+  async setAgentPermissionMode(mode, prompted = true) {
+    await chrome.storage.local.set({
+      agentPermissionMode: mode,
+      agentPermissionModePrompted: prompted
+    });
   }
 };

@@ -10,7 +10,14 @@ import { OpenCodeProvider } from './providers/opencode.js';
 import { OpenClawProvider } from './providers/openclaw.js';
 import { HermesProvider } from './providers/hermes.js';
 import { HuggingFaceProvider } from './providers/huggingface.js';
-import { resolveConfirmation } from './tools.js';
+import { resolveConfirmation, resolveModeSelection } from './tools.js';
+import {
+  compactHistory,
+  PRESERVED_RECENT_TURNS,
+  AUTO_COMPACT_MIN_TURNS,
+  AUTO_COMPACT_TOKEN_THRESHOLD,
+  estimateHistoryTokens
+} from '../shared/contextCompactor.js';
 
 // Setup side panel behavior to open on action click
 chrome.runtime.onInstalled.addListener(() => {
@@ -127,7 +134,20 @@ chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
   }
 
   if (request.type === 'GET_HISTORY') {
-    getCurrentHistory().then(history => sendResponse({ history }));
+    getCurrentHistory().then(history => {
+      const s = allSessions.find(sess => sess.id === currentSessionId);
+      sendResponse({
+        history,
+        compactedSummary: s?.compactedSummary,
+        compactedCount: s?.compactedCount,
+        savedTokens: s?.savedTokens
+      });
+    });
+    return true;
+  }
+
+  if (request.type === 'COMPACT_CONTEXT') {
+    handleCompactContext(request.payload).then(res => sendResponse(res));
     return true;
   }
 
@@ -153,7 +173,49 @@ chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
     sendResponse({ ok: true });
     return true;
   }
+
+  if (request.type === 'SET_AGENT_PERMISSION_MODE') {
+    const { mode, remember, requestId } = request.payload;
+    vault.setAgentPermissionMode(mode, remember !== false).then(() => {
+      if (requestId) {
+        resolveModeSelection(requestId, mode);
+      }
+      sendResponse({ ok: true, mode });
+    });
+    return true;
+  }
+
+  if (request.type === 'GET_AGENT_PERMISSION_MODE') {
+    vault.getAgentPermissionMode().then(res => sendResponse(res));
+    return true;
+  }
 });
+
+async function handleCompactContext(payload = {}) {
+  if (!currentSessionId) return { ok: false, error: 'No active session' };
+  const session = allSessions.find(s => s.id === currentSessionId);
+  if (!session || !session.history || session.history.length <= PRESERVED_RECENT_TURNS) {
+    return { ok: false, error: `Need at least ${PRESERVED_RECENT_TURNS + 1} messages to compact context.` };
+  }
+
+  const provider = payload.providerId ? await getProviderInstance(payload.providerId) : null;
+  const result = await compactHistory(session.history, provider, payload.modelId);
+
+  if (result.compactedCount > 0) {
+    session.compactedSummary = result.summary;
+    session.compactedCount = result.compactedCount;
+    session.savedTokens = result.savedTokens;
+    await saveSessions();
+
+    return {
+      ok: true,
+      compactedCount: result.compactedCount,
+      savedTokens: result.savedTokens,
+      summary: result.summary
+    };
+  }
+  return { ok: false, error: 'Compaction produced no summary' };
+}
 
 async function handleMCPTest(config) {
   try {
@@ -289,10 +351,43 @@ async function handleSendChat(payload) {
   }
 
   const rawHistory = await getCurrentHistory();
+  const session = allSessions.find(s => s.id === currentSessionId);
 
-  // Append full conversation history for multi-turn context
-  const historyForProvider = rawHistory.map(h => ({ role: h.role, content: h.text }));
-  messages.push(...historyForProvider);
+  // Context Compaction: check if session has compacted summary or threshold exceeded
+  if (session?.compactedSummary && session.compactedCount) {
+    messages.push({ role: 'system', content: session.compactedSummary });
+    const uncompacted = rawHistory.slice(session.compactedCount);
+    messages.push(...uncompacted.map(h => ({ role: h.role, content: h.text })));
+  } else if (
+    rawHistory.length >= AUTO_COMPACT_MIN_TURNS ||
+    estimateHistoryTokens(rawHistory) >= AUTO_COMPACT_TOKEN_THRESHOLD
+  ) {
+    const compaction = await compactHistory(rawHistory);
+    if (compaction.compactedCount > 0) {
+      if (session) {
+        session.compactedSummary = compaction.summary;
+        session.compactedCount = compaction.compactedCount;
+        session.savedTokens = compaction.savedTokens;
+        await saveSessions();
+      }
+      messages.push({ role: 'system', content: compaction.summary });
+      const uncompacted = rawHistory.slice(compaction.compactedCount);
+      messages.push(...uncompacted.map(h => ({ role: h.role, content: h.text })));
+
+      chrome.runtime.sendMessage({
+        type: 'CONTEXT_COMPACTED',
+        payload: {
+          compactedCount: compaction.compactedCount,
+          savedTokens: compaction.savedTokens,
+          summary: compaction.summary
+        }
+      }).catch(() => {});
+    } else {
+      messages.push(...rawHistory.map(h => ({ role: h.role, content: h.text })));
+    }
+  } else {
+    messages.push(...rawHistory.map(h => ({ role: h.role, content: h.text })));
+  }
   
   // Build the new user message with attachments
   const userMessage = { role: 'user' };

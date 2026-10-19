@@ -4,6 +4,8 @@ export class OllamaCloudProvider extends OpenAIProvider {
   constructor(config) {
     super(config);
     this.id = 'ollama_cloud';
+    this.name = 'Ollama Cloud';
+    this.supportsTools = true;
     // Using standard OpenAI compatible endpoint logic for Ollama Cloud if applicable.
     this.baseUrl = 'https://ollama.com/v1'; 
   }

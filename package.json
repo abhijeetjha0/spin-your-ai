@@ -1,0 +1,11 @@
+{
+  "name": "spin-your-ai",
+  "version": "1.0.0",
+  "description": "Chrome Extension (Manifest V3) to spin up AI models directly from your browser sidebar",
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/**/*.test.js",
+    "test:coverage": "node --test --experimental-test-coverage test/**/*.test.js"
+  },
+  "devDependencies": {}
+}

@@ -5,6 +5,9 @@ const chatInput = document.getElementById('chat-input');
 const sendBtn = document.getElementById('send-btn');
 const stopBtn = document.getElementById('stop-btn');
 const optionsBtn = document.getElementById('options-btn');
+const exportChatBtn = document.getElementById('export-chat-btn');
+const compactBtn = document.getElementById('compact-btn');
+const reloadModelsBtn = document.getElementById('reload-models-btn');
 const newChatBtn = document.getElementById('new-chat-btn');
 const contextToggle = document.getElementById('include-page-context');
 const attachBtn = document.getElementById('attach-btn');
@@ -18,6 +21,17 @@ const agentConfirmArgs = document.getElementById('agent-confirm-args');
 const agentAllowBtn = document.getElementById('agent-allow-btn');
 const agentDenyBtn = document.getElementById('agent-deny-btn');
 let pendingAgentRequestId = null;
+
+// Agent permission mode modal & controls
+const agentPermissionBtn = document.getElementById('agent-permission-btn');
+const agentModeModal = document.getElementById('agent-mode-modal');
+const closeAgentModeBtn = document.getElementById('close-agent-mode-btn');
+const saveAgentModeBtn = document.getElementById('save-agent-mode-btn');
+const agentBannerChangeModeBtn = document.getElementById('agent-banner-change-mode-btn');
+const agentBannerModeLabel = document.getElementById('agent-banner-mode-label');
+const rememberAgentMode = document.getElementById('remember-agent-mode');
+let currentAgentMode = 'allow_some';
+let pendingModeRequestId = null;
 
 // Combobox elements
 const modelCombobox = document.getElementById('model-combobox');
@@ -59,6 +73,20 @@ async function init() {
   const exportChatBtn = document.getElementById('export-chat-btn');
   exportChatBtn.addEventListener('click', exportChat);
 
+  compactBtn?.addEventListener('click', async () => {
+    if (isGenerating) return;
+    const [providerId, modelId] = (selectedModelValue || '').split('::');
+    const res = await chrome.runtime.sendMessage({
+      type: 'COMPACT_CONTEXT',
+      payload: { providerId, modelId }
+    });
+    if (res && res.ok) {
+      renderCompactedBadge(res.compactedCount, res.savedTokens);
+    } else if (res && res.error) {
+      showToast(res.error);
+    }
+  });
+
   const reloadModelsBtn = document.getElementById('reload-models-btn');
   reloadModelsBtn.addEventListener('click', () => {
     loadProviders();
@@ -66,6 +94,19 @@ async function init() {
     if (icon) {
       icon.style.animation = 'spin 1s linear infinite';
       setTimeout(() => icon.style.animation = '', 1000);
+    }
+  });
+
+  // Agent permission mode handlers
+  agentPermissionBtn?.addEventListener('click', () => showAgentModeModal());
+  closeAgentModeBtn?.addEventListener('click', () => hideAgentModeModal());
+  saveAgentModeBtn?.addEventListener('click', saveAgentPermissionMode);
+  agentBannerChangeModeBtn?.addEventListener('click', () => showAgentModeModal());
+
+  // Fetch initial agent permission mode
+  chrome.runtime.sendMessage({ type: 'GET_AGENT_PERMISSION_MODE' }).then(res => {
+    if (res && res.mode) {
+      updateModeLabels(res.mode);
     }
   });
 
@@ -129,7 +170,12 @@ async function init() {
       currentSessionId = res.currentSessionId;
     }
     chrome.runtime.sendMessage({ type: 'GET_HISTORY' }).then(h => {
-      if (h && h.history) renderHistory(h.history);
+      if (h && h.history) {
+        renderHistory(h.history);
+        if (h.compactedCount) {
+          renderCompactedBadge(h.compactedCount, h.savedTokens, true);
+        }
+      }
     });
   });
 
@@ -139,12 +185,16 @@ async function init() {
       handleStreamChunk(msg.payload.chunk, msg.payload.done, msg.payload.error);
     } else if (msg.type === 'PROVIDERS_UPDATED') {
       loadProviders();
+    } else if (msg.type === 'CONTEXT_COMPACTED') {
+      renderCompactedBadge(msg.payload.compactedCount, msg.payload.savedTokens);
     } else if (msg.type === 'UPDATE_SESSIONS') {
       allSessions = msg.payload.sessions || [];
       currentSessionId = msg.payload.currentSessionId;
       renderSessionsList();
     } else if (msg.type === 'AGENT_CONFIRM_ACTION') {
       showAgentConfirmBanner(msg.payload);
+    } else if (msg.type === 'PROMPT_AGENT_MODE') {
+      showAgentModeModal(msg.payload.requestId);
     }
   });
 }
@@ -662,12 +712,63 @@ function renderSessionsList() {
   });
 }
 
-// ── Agent Confirmation Banner ─────────────────────────────────────
+// ── Agent Confirmation Banner & Permission Modes ───────────────────
+
+function updateModeLabels(mode) {
+  currentAgentMode = mode;
+  const labels = {
+    allow_some: 'Allow Some',
+    allow_all: 'Allow All',
+    allow_none: 'Allow None'
+  };
+  const label = labels[mode] || 'Allow Some';
+  if (agentBannerModeLabel) {
+    agentBannerModeLabel.textContent = label;
+  }
+  if (agentPermissionBtn) {
+    agentPermissionBtn.title = `Agent Permission Mode: ${label}`;
+  }
+}
+
+function showAgentModeModal(requestId = null) {
+  pendingModeRequestId = requestId;
+  const targetRadio = document.querySelector(`input[name="browser-agent-mode"][value="${currentAgentMode}"]`);
+  if (targetRadio) {
+    targetRadio.checked = true;
+  }
+  agentModeModal.classList.remove('hidden');
+}
+
+function hideAgentModeModal() {
+  agentModeModal.classList.add('hidden');
+  pendingModeRequestId = null;
+}
+
+async function saveAgentPermissionMode() {
+  const selectedRadio = document.querySelector('input[name="browser-agent-mode"]:checked');
+  const mode = selectedRadio ? selectedRadio.value : 'allow_some';
+  const remember = rememberAgentMode ? rememberAgentMode.checked : true;
+
+  updateModeLabels(mode);
+
+  await chrome.runtime.sendMessage({
+    type: 'SET_AGENT_PERMISSION_MODE',
+    payload: {
+      mode,
+      remember,
+      requestId: pendingModeRequestId
+    }
+  });
+
+  hideAgentModeModal();
+  showToast(`Agent Permission: ${mode === 'allow_all' ? 'Allow All' : mode === 'allow_none' ? 'Allow None' : 'Allow Some'}`);
+}
 
 function showAgentConfirmBanner({ requestId, toolName, args }) {
   pendingAgentRequestId = requestId;
   agentConfirmToolName.textContent = toolName;
   agentConfirmArgs.textContent = JSON.stringify(args, null, 2);
+  updateModeLabels(currentAgentMode);
   agentConfirmBanner.classList.remove('hidden');
 }
 
@@ -695,5 +796,38 @@ agentDenyBtn.addEventListener('click', () => {
   });
   hideAgentConfirmBanner();
 });
+
+function renderCompactedBadge(compactedCount, savedTokens, isRestoring = false) {
+  const existing = document.getElementById('compact-badge');
+  if (existing) {
+    existing.remove();
+  }
+
+  const badge = document.createElement('div');
+  badge.id = 'compact-badge';
+  badge.className = 'context-compact-badge';
+  badge.innerHTML = `
+    <span class="material-symbols-outlined compact-icon">compress</span>
+    <span class="compact-text">Context Compacted: Condensed ${compactedCount} earlier turns (Saved ~${savedTokens} tokens)</span>
+  `;
+
+  chatContainer.appendChild(badge);
+  if (!isRestoring) {
+    chatContainer.scrollTop = chatContainer.scrollHeight;
+  }
+}
+
+function showToast(message) {
+  let toast = document.getElementById('chat-toast');
+  if (!toast) {
+    toast = document.createElement('div');
+    toast.id = 'chat-toast';
+    toast.className = 'chat-toast';
+    document.body.appendChild(toast);
+  }
+  toast.textContent = message;
+  toast.classList.add('visible');
+  setTimeout(() => toast.classList.remove('visible'), 3000);
+}
 
 document.addEventListener('DOMContentLoaded', init);

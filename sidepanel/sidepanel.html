@@ -27,6 +27,8 @@
         </div>
       </div>
       <div class="header-actions">
+        <button id="agent-permission-btn" class="icon-btn" title="Agent Permission Mode"><span class="material-symbols-outlined">security</span></button>
+        <button id="compact-btn" class="icon-btn" title="Compact Context (Save Tokens)"><span class="material-symbols-outlined">compress</span></button>
         <button id="reload-models-btn" class="icon-btn" title="Reload Models"><span class="material-symbols-outlined">refresh</span></button>
         <button id="export-chat-btn" class="icon-btn" title="Export Chat"><span class="material-symbols-outlined">download</span></button>
         <button id="new-chat-btn" class="icon-btn" title="New Chat"><span class="material-symbols-outlined">add</span></button>
@@ -70,6 +72,9 @@
     <div class="agent-confirm-header">
       <span class="material-symbols-outlined" style="color:#a78bfa;font-size:18px;">smart_toy</span>
       <span class="agent-confirm-title">AGENT ACTION REQUESTED</span>
+      <button id="agent-banner-change-mode-btn" class="agent-mode-switch-btn" title="Change Permission Mode">
+        <span class="material-symbols-outlined" style="font-size: 13px;">tune</span> <span id="agent-banner-mode-label">Allow Some</span>
+      </button>
     </div>
     <div class="agent-confirm-body">
       <span class="agent-confirm-tool" id="agent-confirm-tool-name"></span>
@@ -93,6 +98,74 @@
         <button id="close-sessions-btn" class="icon-btn"><span class="material-symbols-outlined">close</span></button>
       </div>
       <div id="sessions-list" class="modal-body model-list" style="max-height: 400px; overflow-y: auto;"></div>
+    </div>
+  </div>
+
+  <!-- Agent Permission Mode Modal (Popup Window) -->
+  <div id="agent-mode-modal" class="modal hidden">
+    <div class="modal-content agent-mode-content">
+      <div class="modal-header">
+        <div class="modal-title-wrapper" style="display: flex; align-items: center; gap: 8px;">
+          <span class="material-symbols-outlined" style="color: #a78bfa; font-size: 18px;">security</span>
+          <h2 style="font-size: 13px; color: var(--text-main); font-weight: bold; letter-spacing: 0.08em; margin: 0;">BROWSER AGENT PERMISSIONS</h2>
+        </div>
+        <button id="close-agent-mode-btn" class="icon-btn" title="Close"><span class="material-symbols-outlined">close</span></button>
+      </div>
+
+      <div class="agent-mode-body">
+        <p class="agent-mode-intro">Select permission mode for browser agent tool calls on your active tab:</p>
+        
+        <div class="mode-cards" id="mode-cards-container">
+          <!-- Mode 1: Allow Some -->
+          <label class="mode-card" data-mode="allow_some">
+            <input type="radio" name="browser-agent-mode" value="allow_some" checked>
+            <div class="mode-card-inner">
+              <div class="mode-card-header">
+                <span class="mode-card-title">ALLOW SOME</span>
+                <span class="mode-badge badge-prompt">PROMPT DESTRUCTIVE</span>
+              </div>
+              <p class="mode-card-desc">Safe actions (inspect DOM, fill inputs) run automatically. Destructive actions (click, navigate, select) ask for confirmation first.</p>
+            </div>
+          </label>
+
+          <!-- Mode 2: Allow All -->
+          <label class="mode-card" data-mode="allow_all">
+            <input type="radio" name="browser-agent-mode" value="allow_all">
+            <div class="mode-card-inner">
+              <div class="mode-card-header">
+                <span class="mode-card-title">ALLOW ALL</span>
+                <span class="mode-badge badge-auto">FULL AUTONOMOUS</span>
+              </div>
+              <p class="mode-card-desc">Automatically executes all actions including destructive clicks, selects, and navigation without asking.</p>
+            </div>
+          </label>
+
+          <!-- Mode 3: Allow None -->
+          <label class="mode-card" data-mode="allow_none">
+            <input type="radio" name="browser-agent-mode" value="allow_none">
+            <div class="mode-card-inner">
+              <div class="mode-card-header">
+                <span class="mode-card-title">ALLOW NONE</span>
+                <span class="mode-badge badge-block">STRICT READ-ONLY</span>
+              </div>
+              <p class="mode-card-desc">Blocks all browser agent tool calls from interacting with or modifying the page.</p>
+            </div>
+          </label>
+        </div>
+
+        <div class="mode-remember-row">
+          <label class="checkbox-label" style="display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--text-muted); cursor: pointer;">
+            <input type="checkbox" id="remember-agent-mode" checked style="accent-color: #a78bfa;">
+            <span>Remember selection for future sessions</span>
+          </label>
+        </div>
+      </div>
+
+      <div class="modal-footer" style="padding-top: 10px; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; gap: 8px;">
+        <button id="save-agent-mode-btn" class="agent-btn agent-btn-allow">
+          <span class="material-symbols-outlined">check</span> SAVE &amp; PROCEED
+        </button>
+      </div>
     </div>
   </div>
 
