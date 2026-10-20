@@ -85,3 +85,38 @@ test('renderMarkdown - tables and horizontal rules', () => {
   assert.ok(html.includes('<td>Val A</td>'));
   assert.ok(html.includes('<hr>'));
 });
+
+test('renderMarkdown - subagents rendered inside Mid-Process Analysis', () => {
+  const subagents = [
+    {
+      id: 'subagent_test_1',
+      role: 'DOM Inspector',
+      task: 'Extract navigation links',
+      status: 'working',
+      turnsCount: 0,
+      history: []
+    },
+    {
+      id: 'subagent_test_2',
+      role: 'Content Analyst',
+      task: 'Summarize main article',
+      status: 'completed',
+      turnsCount: 1,
+      history: [
+        { role: 'user', content: 'Summarize main article' },
+        { role: 'assistant', content: 'Summary outcome' }
+      ]
+    }
+  ];
+
+  const html = renderMarkdown('Here is the main answer.', { subagents, activeCount: 1 });
+  assert.ok(html.includes('Mid-Process Analysis'));
+  assert.ok(html.includes('Autonomous Sub-Agents'));
+  assert.ok(html.includes('1 Working'));
+  assert.ok(html.includes('DOM Inspector'));
+  assert.ok(html.includes('Content Analyst'));
+  assert.ok(html.includes('Terminate'));
+  assert.ok(html.includes('View Context'));
+  assert.ok(html.includes('Here is the main answer.'));
+});
+

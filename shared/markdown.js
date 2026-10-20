@@ -3,8 +3,88 @@
  * Supports: headings, bold, italic, strikethrough, code blocks, inline code,
  * ordered/unordered lists, blockquotes, tables, horizontal rules, and links.
  */
-export function renderMarkdown(text) {
-  if (!text) return '';
+function escapeSubagentHtml(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function generateSubagentsHtml(subagents, activeCount = 0) {
+  if (!subagents || subagents.length === 0) return '';
+
+  const isWorking = activeCount > 0;
+  const countLabel = isWorking ? `${activeCount} Working` : `${subagents.length} Agent${subagents.length === 1 ? '' : 's'}`;
+  const pulseHtml = isWorking ? '<span class="subagent-pulse-dot"></span>' : '';
+
+  const cardsHtml = subagents.map(sa => {
+    const statusClass = sa.status || 'completed';
+    const isWorkingSa = statusClass === 'working';
+    const turns = sa.turnsCount || (sa.history ? sa.history.filter(h => h.role === 'assistant').length : 0);
+    const idShort = (sa.id || '').length > 18 ? `${sa.id.slice(0, 18)}...` : sa.id;
+
+    let contextContent = '';
+    if (sa.history && sa.history.length > 0) {
+      contextContent = sa.history
+        .map(h => `[${(h.role || 'unknown').toUpperCase()}]\n${typeof h.content === 'string' ? h.content : JSON.stringify(h.content, null, 2)}`)
+        .join('\n\n---\n\n');
+    } else if (sa.result) {
+      contextContent = `[RESULT]\n${sa.result}`;
+    } else {
+      contextContent = '(No context turns recorded)';
+    }
+
+    const termBtnHtml = isWorkingSa 
+      ? `<button type="button" class="subagent-terminate-btn" data-subagent-id="${escapeSubagentHtml(sa.id)}">Terminate</button>` 
+      : '';
+
+    return `
+      <div class="subagent-card ${statusClass}">
+        <div class="subagent-card-header">
+          <span class="subagent-role">${escapeSubagentHtml(sa.role || 'Specialist')}</span>
+          <span class="subagent-status-tag ${statusClass}">${statusClass}</span>
+        </div>
+        <div class="subagent-task">${escapeSubagentHtml(sa.task || '')}</div>
+        <div class="subagent-meta">
+          <span>ID: <code>${escapeSubagentHtml(idShort)}</code> | Turns: ${turns}</span>
+          <div style="display: flex; gap: 6px;">
+            <button type="button" class="subagent-context-toggle">View Context</button>
+            ${termBtnHtml}
+          </div>
+        </div>
+        <div class="subagent-context-viewer hidden">${escapeSubagentHtml(contextContent)}</div>
+      </div>
+    `;
+  }).join('');
+
+  return `
+    <div class="midprocess-subagents-block">
+      <div class="midprocess-subagents-header">
+        <div class="subagents-title-group">
+          <span class="material-symbols-outlined" style="font-size:16px;color:var(--text-ai,#7dd3fc);vertical-align:middle;margin-right:6px;">hub</span>
+          <strong>Autonomous Sub-Agents</strong>
+          <span class="subagents-count-badge ${isWorking ? 'working' : ''}">${countLabel}</span>
+          ${pulseHtml}
+        </div>
+        <button type="button" class="subagent-reset-btn" title="Reset Inactive Sub-Agents">
+          <span class="material-symbols-outlined" style="font-size:14px;vertical-align:middle;">delete_sweep</span> Reset
+        </button>
+      </div>
+      <div class="midprocess-subagents-list">
+        ${cardsHtml}
+      </div>
+    </div>
+  `;
+}
+
+export function renderMarkdown(text, options = {}) {
+  const subagents = options?.subagents || [];
+  const activeSubagentsCount = options?.activeCount || 0;
+
+  if (!text && (!subagents || subagents.length === 0)) return '';
+  text = text || '';
 
   // --- Step 1: Extract and protect code blocks from further processing ---
   const protectedBlocks = [];
@@ -38,9 +118,23 @@ export function renderMarkdown(text) {
 
   // 3. Extract MCP/Agent Tool logs
   text = text.replace(/(?:\n\n)?>\s*<span[^>]*>settings<\/span>\s*\*Executing (?:MCP )?tool `([^`]+)`\.\.\.\*(?:\n\n)?/gi, (_match, toolName) => {
-      midProcessItems.push(`<div style="margin-bottom: 4px;"><span class="material-symbols-outlined" style="font-size:14px;vertical-align:middle;margin-right:4px;">build</span>Executing Tool: <code>${toolName}</code></div>`);
+      if (toolName === 'spin_subagent') {
+        if (!subagents || subagents.length === 0) {
+          midProcessItems.push(`<div style="margin-bottom: 4px;"><span class="material-symbols-outlined" style="font-size:14px;vertical-align:middle;margin-right:4px;color:var(--text-ai,#7dd3fc);">hub</span>Executing Tool: <code>spin_subagent</code></div>`);
+        }
+      } else {
+        midProcessItems.push(`<div style="margin-bottom: 4px;"><span class="material-symbols-outlined" style="font-size:14px;vertical-align:middle;margin-right:4px;">build</span>Executing Tool: <code>${toolName}</code></div>`);
+      }
       return '';
   });
+
+  // 4. Inject Sub-Agents block into Mid-Process Analysis if subagents are present
+  if (subagents && subagents.length > 0) {
+    if (activeSubagentsCount > 0) {
+      hasOpenStream = true;
+    }
+    midProcessItems.push(generateSubagentsHtml(subagents, activeSubagentsCount));
+  }
 
   if (midProcessItems.length > 0) {
       const combinedContent = midProcessItems.join('<hr style="border-color: #333; margin: 8px 0;">');

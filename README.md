@@ -10,6 +10,7 @@ A Manifest V3 Chrome Extension that lets you spin up AI models directly from you
 - **Provider Auto-Discovery:** Automatically detects local agent frameworks like OpenClaw and Hermes Desktop.
 - **Browser Automation Agent:** The AI can autonomously navigate, click, scroll, and batch-fill forms on your behalf using native DOM integration, effectively acting as an autonomous browser agent. Destructive actions (like clicking or navigating) feature user-confirmation guards.
 - **Chat & Context Compaction:** Condense verbose earlier turns into an executive summary on demand or automatically, slashing token consumption and latency just like Claude, Gemini, and ChatGPT.
+- **Multimodal Sub-Agent Structure & Live Monitor:** Autonomously spin up specialized sub-agents (for multimodal image/diagram analysis, isolated code inspection, or deep research) with dedicated, preserved context. Real-time header badges display active working sub-agent counts with an interactive monitor to inspect sub-agent reasoning and context history.
 
 ## Supported Providers
 

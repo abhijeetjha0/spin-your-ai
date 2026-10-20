@@ -1,4 +1,9 @@
 import { renderMarkdown } from '../shared/markdown.js';
+import {
+  filterSlashCommands,
+  extractSlashQuery,
+  deduplicateSlashCommands
+} from '../shared/slashCommands.js';
 
 const chatContainer = document.getElementById('chat-container');
 const chatInput = document.getElementById('chat-input');
@@ -14,6 +19,13 @@ const attachBtn = document.getElementById('attach-btn');
 const fileInput = document.getElementById('file-input');
 const attachmentPreview = document.getElementById('attachment-preview');
 
+// Slash commands elements & state
+const slashPopover = document.getElementById('slash-commands-popover');
+const slashList = document.getElementById('slash-commands-list');
+let activeSlashIndex = 0;
+let currentMatchingSlashCommands = [];
+let currentSlashQueryMeta = null;
+
 // Agent confirmation banner
 const agentConfirmBanner = document.getElementById('agent-confirm-banner');
 const agentConfirmToolName = document.getElementById('agent-confirm-tool-name');
@@ -21,6 +33,16 @@ const agentConfirmArgs = document.getElementById('agent-confirm-args');
 const agentAllowBtn = document.getElementById('agent-allow-btn');
 const agentDenyBtn = document.getElementById('agent-deny-btn');
 let pendingAgentRequestId = null;
+
+// Sub-agents monitor elements & state
+const subagentsStatusBtn = document.getElementById('subagents-status-btn');
+const subagentsCountText = document.getElementById('subagents-count-text');
+const subagentsModal = document.getElementById('subagents-modal');
+const closeSubagentsBtn = document.getElementById('close-subagents-btn');
+const clearSubagentsBtn = document.getElementById('clear-subagents-btn');
+const subagentsListContainer = document.getElementById('subagents-list-container');
+let currentSubagents = [];
+let activeSubagentsCount = 0;
 
 // Agent permission mode modal & controls
 const agentPermissionBtn = document.getElementById('agent-permission-btn');
@@ -110,9 +132,240 @@ async function init() {
     }
   });
 
+  // Delegated event handling for interactive Subagent UI inside Mid-Process Analysis
+  chatContainer?.addEventListener('click', async (e) => {
+    // 1. Toggle context viewer
+    const toggleBtn = e.target.closest('.subagent-context-toggle');
+    if (toggleBtn) {
+      const card = toggleBtn.closest('.subagent-card');
+      const viewer = card?.querySelector('.subagent-context-viewer');
+      if (viewer) {
+        const isHidden = viewer.classList.toggle('hidden');
+        toggleBtn.textContent = isHidden ? 'View Context' : 'Hide Context';
+      }
+      return;
+    }
+
+    // 2. Terminate subagent
+    const termBtn = e.target.closest('.subagent-terminate-btn');
+    if (termBtn) {
+      const subagentId = termBtn.dataset.subagentId;
+      if (subagentId) {
+        termBtn.disabled = true;
+        termBtn.textContent = 'Stopping...';
+        await chrome.runtime.sendMessage({
+          type: 'TERMINATE_SUBAGENT',
+          payload: { subagentId }
+        });
+        const res = await chrome.runtime.sendMessage({ type: 'GET_SUBAGENTS' });
+        if (res) updateSubagentsUI(res.activeCount, res.subagents);
+      }
+      return;
+    }
+
+    // 3. Reset inactive subagents
+    const resetBtn = e.target.closest('.subagent-reset-btn');
+    if (resetBtn) {
+      resetBtn.disabled = true;
+      await chrome.runtime.sendMessage({ type: 'CLEAR_SUBAGENTS' });
+      const res = await chrome.runtime.sendMessage({ type: 'GET_SUBAGENTS' });
+      if (res) updateSubagentsUI(res.activeCount, res.subagents);
+      return;
+    }
+  });
+
+  // Subagents handlers
+  subagentsStatusBtn?.addEventListener('click', () => {
+    subagentsModal?.classList.remove('hidden');
+    renderSubagentsList();
+  });
+  closeSubagentsBtn?.addEventListener('click', () => {
+    subagentsModal?.classList.add('hidden');
+  });
+  clearSubagentsBtn?.addEventListener('click', async () => {
+    await chrome.runtime.sendMessage({ type: 'CLEAR_SUBAGENTS' });
+    const res = await chrome.runtime.sendMessage({ type: 'GET_SUBAGENTS' });
+    if (res) updateSubagentsUI(res.activeCount, res.subagents);
+  });
+
+  // Fetch initial subagents state
+  chrome.runtime.sendMessage({ type: 'GET_SUBAGENTS' }).then(res => {
+    if (res) {
+      updateSubagentsUI(res.activeCount, res.subagents);
+    }
+  }).catch(() => {});
+
   newChatBtn.addEventListener('click', clearChat);
 
+  // Slash commands popover rendering & handling
+  function renderSlashPopover(commands) {
+    if (!slashList || !slashPopover) return;
+    const deduped = deduplicateSlashCommands(commands);
+    currentMatchingSlashCommands = deduped;
+    slashList.innerHTML = '';
+
+    if (deduped.length === 0) {
+      const emptyItem = document.createElement('div');
+      emptyItem.className = 'slash-command-item';
+      emptyItem.style.color = 'var(--text-muted, #94a3b8)';
+      emptyItem.style.cursor = 'default';
+      emptyItem.style.padding = '8px 10px';
+      emptyItem.textContent = 'No matching commands';
+      slashList.appendChild(emptyItem);
+      slashPopover.classList.remove('hidden');
+      return;
+    }
+
+    if (activeSlashIndex >= deduped.length) {
+      activeSlashIndex = 0;
+    }
+
+    deduped.forEach((cmd, idx) => {
+      const item = document.createElement('div');
+      item.className = `slash-command-item ${idx === activeSlashIndex ? 'active' : ''}`;
+      item.dataset.index = idx;
+
+      const catClass = cmd.category === 'Skill' ? 'cat-skill' : (cmd.category === 'Action' ? 'cat-action' : '');
+
+      item.innerHTML = `
+        <span class="material-symbols-outlined slash-command-icon">${cmd.icon || 'terminal'}</span>
+        <div class="slash-command-info">
+          <div class="slash-command-title">
+            <span>${cmd.command}</span>
+            <span class="slash-command-badge ${catClass}">${cmd.category}</span>
+          </div>
+          <div class="slash-command-desc">${cmd.description || ''}</div>
+        </div>
+      `;
+
+      item.addEventListener('mouseenter', () => {
+        activeSlashIndex = idx;
+        updateSlashSelection();
+      });
+
+      item.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        executeSlashCommand(cmd);
+      });
+
+      slashList.appendChild(item);
+    });
+
+    slashPopover.classList.remove('hidden');
+    scrollSlashActiveIntoView();
+  }
+
+  function updateSlashSelection() {
+    if (!slashList) return;
+    const items = slashList.querySelectorAll('.slash-command-item');
+    items.forEach((item, idx) => {
+      if (idx === activeSlashIndex) {
+        item.classList.add('active');
+      } else {
+        item.classList.remove('active');
+      }
+    });
+    scrollSlashActiveIntoView();
+  }
+
+  function scrollSlashActiveIntoView() {
+    if (!slashList) return;
+    const activeItem = slashList.children[activeSlashIndex];
+    if (activeItem && activeItem.scrollIntoView) {
+      activeItem.scrollIntoView({ block: 'nearest' });
+    }
+  }
+
+  function hideSlashPopover() {
+    if (slashPopover) {
+      slashPopover.classList.add('hidden');
+    }
+    currentMatchingSlashCommands = [];
+    currentSlashQueryMeta = null;
+    activeSlashIndex = 0;
+  }
+
+  function executeSlashCommand(cmd) {
+    if (!cmd) return;
+
+    if (cmd.type === 'action') {
+      if (currentSlashQueryMeta && currentSlashQueryMeta.isMatch) {
+        const val = chatInput.value;
+        const prefix = val.slice(0, currentSlashQueryMeta.slashIndex);
+        const suffix = val.slice(currentSlashQueryMeta.endIndex);
+        chatInput.value = (prefix + suffix).trim();
+      } else {
+        chatInput.value = '';
+      }
+      chatInput.style.height = 'auto';
+      hideSlashPopover();
+
+      if (cmd.actionId === 'history') {
+        sessionsBtn?.click();
+      } else if (cmd.actionId === 'compact') {
+        compactBtn?.click();
+      } else if (cmd.actionId === 'refresh') {
+        reloadModelsBtn?.click();
+        showToast('Refreshed models');
+      } else if (cmd.actionId === 'clear') {
+        clearChat();
+        showToast('Chat cleared');
+      } else if (cmd.actionId === 'help') {
+        document.getElementById('help-btn')?.click();
+      } else if (cmd.actionId === 'togglePage') {
+        if (contextToggle) {
+          contextToggle.checked = !contextToggle.checked;
+          showToast(contextToggle.checked ? 'Page context included' : 'Page context excluded');
+        }
+      }
+      chatInput.focus();
+      return;
+    }
+
+    const templateToInsert = cmd.template || `${cmd.command} `;
+    if (currentSlashQueryMeta && currentSlashQueryMeta.isMatch) {
+      const val = chatInput.value;
+      const prefix = val.slice(0, currentSlashQueryMeta.slashIndex);
+      const suffix = val.slice(currentSlashQueryMeta.endIndex);
+      chatInput.value = prefix + templateToInsert + suffix;
+      const newCursorPos = (prefix + templateToInsert).length;
+      chatInput.setSelectionRange(newCursorPos, newCursorPos);
+    } else {
+      chatInput.value = templateToInsert;
+    }
+
+    chatInput.style.height = 'auto';
+    chatInput.style.height = (chatInput.scrollHeight) + 'px';
+    hideSlashPopover();
+    chatInput.focus();
+  }
+
   chatInput.addEventListener('keydown', (e) => {
+    if (slashPopover && !slashPopover.classList.contains('hidden') && currentMatchingSlashCommands.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        activeSlashIndex = (activeSlashIndex + 1) % currentMatchingSlashCommands.length;
+        updateSlashSelection();
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        activeSlashIndex = (activeSlashIndex - 1 + currentMatchingSlashCommands.length) % currentMatchingSlashCommands.length;
+        updateSlashSelection();
+        return;
+      }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault();
+        executeSlashCommand(currentMatchingSlashCommands[activeSlashIndex]);
+        return;
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        hideSlashPopover();
+        return;
+      }
+    }
+
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       sendMessage();
@@ -122,6 +375,23 @@ async function init() {
   chatInput.addEventListener('input', () => {
     chatInput.style.height = 'auto';
     chatInput.style.height = (chatInput.scrollHeight) + 'px';
+
+    const cursorPos = chatInput.selectionStart;
+    const queryMeta = extractSlashQuery(chatInput.value, cursorPos);
+    if (queryMeta.isMatch) {
+      currentSlashQueryMeta = queryMeta;
+      const filtered = filterSlashCommands(queryMeta.query);
+      activeSlashIndex = 0;
+      renderSlashPopover(filtered);
+    } else {
+      hideSlashPopover();
+    }
+  });
+
+  document.addEventListener('click', (e) => {
+    if (slashPopover && !slashPopover.contains(e.target) && e.target !== chatInput) {
+      hideSlashPopover();
+    }
   });
 
   sendBtn.addEventListener('click', sendMessage);
@@ -195,6 +465,8 @@ async function init() {
       showAgentConfirmBanner(msg.payload);
     } else if (msg.type === 'PROMPT_AGENT_MODE') {
       showAgentModeModal(msg.payload.requestId);
+    } else if (msg.type === 'SUBAGENT_STATUS_UPDATE') {
+      updateSubagentsUI(msg.payload.activeCount, msg.payload.subagents);
     }
   });
 }
@@ -511,7 +783,10 @@ function handleStreamChunk(chunk, done, error) {
         msgEl.innerHTML = '';
     }
     currentAiText += chunk;
-    msgEl.innerHTML = renderMarkdown(currentAiText);
+    msgEl.innerHTML = renderMarkdown(currentAiText, {
+      subagents: currentSubagents,
+      activeCount: activeSubagentsCount
+    });
     
     // Smart scroll: only auto-scroll if user is near the bottom
     const threshold = 150;
@@ -534,7 +809,7 @@ function finishGeneration() {
   isGenerating = false;
   chatInput.disabled = false;
   attachBtn.disabled = false;
-  chatInput.placeholder = "Type your message...";
+  chatInput.placeholder = "Ask anything... (/ for commands & skills)";
   currentMessageId = null;
   currentAiText = '';
   stopBtn.classList.add('hidden');
@@ -547,6 +822,9 @@ function finishGeneration() {
 function clearChat() {
   chatContainer.innerHTML = '<div class="message system-msg">Welcome to Spin Your AI! Select a model and start chatting.</div>';
   chrome.runtime.sendMessage({ type: 'CLEAR_HISTORY' });
+  chrome.runtime.sendMessage({ type: 'CLEAR_SUBAGENTS' });
+  currentSubagents = [];
+  activeSubagentsCount = 0;
   isGenerating = false;
   currentMessageId = null;
   currentAiText = '';
@@ -710,6 +988,134 @@ function renderSessionsList() {
     
     sessionsList.appendChild(item);
   });
+}
+
+// ── Sub-Agents UI & Monitor ────────────────────────────────────────
+
+function updateSubagentsUI(activeCount, subagents) {
+  activeSubagentsCount = activeCount || 0;
+  currentSubagents = subagents || [];
+
+  // Update Mid-Process Analysis in current or latest AI message in the middle section
+  const targetMsgEl = currentMessageId 
+    ? document.getElementById(`msg-${currentMessageId}`)
+    : chatContainer.querySelector('.message.ai-msg:last-of-type');
+
+  if (targetMsgEl && currentAiText) {
+    targetMsgEl.innerHTML = renderMarkdown(currentAiText, {
+      subagents: currentSubagents,
+      activeCount: activeSubagentsCount
+    });
+  }
+
+  if (subagentsStatusBtn && subagentsCountText) {
+    if (activeSubagentsCount > 0) {
+      subagentsStatusBtn.classList.remove('hidden');
+      subagentsStatusBtn.classList.add('working');
+      subagentsCountText.textContent = `${activeSubagentsCount} Working`;
+    } else if (currentSubagents.length > 0) {
+      subagentsStatusBtn.classList.remove('hidden');
+      subagentsStatusBtn.classList.remove('working');
+      subagentsCountText.textContent = `${currentSubagents.length} Sub-Agent${currentSubagents.length === 1 ? '' : 's'}`;
+    } else {
+      subagentsStatusBtn.classList.add('hidden');
+      subagentsStatusBtn.classList.remove('working');
+    }
+  }
+
+  if (subagentsModal && !subagentsModal.classList.contains('hidden')) {
+    renderSubagentsList();
+  }
+}
+
+function renderSubagentsList() {
+  if (!subagentsListContainer) return;
+  subagentsListContainer.innerHTML = '';
+
+  if (currentSubagents.length === 0) {
+    subagentsListContainer.innerHTML = '<div class="subagents-empty">No sub-agents currently spawned.</div>';
+    return;
+  }
+
+  // Sort: working first, then most recently created
+  const sorted = [...currentSubagents].sort((a, b) => {
+    if (a.status === 'working' && b.status !== 'working') return -1;
+    if (b.status === 'working' && a.status !== 'working') return 1;
+    return (b.createdAt || 0) - (a.createdAt || 0);
+  });
+
+  for (const sa of sorted) {
+    const card = document.createElement('div');
+    card.className = `subagent-card ${sa.status}`;
+
+    const header = document.createElement('div');
+    header.className = 'subagent-card-header';
+
+    const role = document.createElement('span');
+    role.className = 'subagent-role';
+    role.textContent = sa.role || 'Specialist';
+
+    const statusTag = document.createElement('span');
+    statusTag.className = `subagent-status-tag ${sa.status}`;
+    statusTag.textContent = sa.status;
+
+    header.appendChild(role);
+    header.appendChild(statusTag);
+    card.appendChild(header);
+
+    const task = document.createElement('div');
+    task.className = 'subagent-task';
+    task.textContent = sa.task;
+    card.appendChild(task);
+
+    const meta = document.createElement('div');
+    meta.className = 'subagent-meta';
+
+    const turnsInfo = document.createElement('span');
+    turnsInfo.textContent = `ID: ${sa.id.slice(0, 16)}... | Turns: ${sa.turnsCount || 0}`;
+    meta.appendChild(turnsInfo);
+
+    const actions = document.createElement('div');
+    actions.style.display = 'flex';
+    actions.style.gap = '6px';
+
+    const toggleContextBtn = document.createElement('button');
+    toggleContextBtn.className = 'subagent-context-toggle';
+    toggleContextBtn.textContent = 'View Context';
+    actions.appendChild(toggleContextBtn);
+
+    if (sa.status === 'working') {
+      const termBtn = document.createElement('button');
+      termBtn.className = 'subagent-terminate-btn';
+      termBtn.textContent = 'Terminate';
+      termBtn.addEventListener('click', () => {
+        chrome.runtime.sendMessage({
+          type: 'TERMINATE_SUBAGENT',
+          payload: { subagentId: sa.id }
+        });
+      });
+      actions.appendChild(termBtn);
+    }
+
+    meta.appendChild(actions);
+    card.appendChild(meta);
+
+    const contextViewer = document.createElement('div');
+    contextViewer.className = 'subagent-context-viewer hidden';
+
+    const contextContent = (sa.history || [])
+      .map(h => `[${(h.role || 'unknown').toUpperCase()}]\n${typeof h.content === 'string' ? h.content : JSON.stringify(h.content, null, 2)}`)
+      .join('\n\n---\n\n');
+    contextViewer.textContent = contextContent || '(No context turns recorded)';
+    card.appendChild(contextViewer);
+
+    toggleContextBtn.addEventListener('click', () => {
+      const isHidden = contextViewer.classList.toggle('hidden');
+      toggleContextBtn.textContent = isHidden ? 'View Context' : 'Hide Context';
+    });
+
+    subagentsListContainer.appendChild(card);
+  }
 }
 
 // ── Agent Confirmation Banner & Permission Modes ───────────────────

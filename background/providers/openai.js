@@ -27,12 +27,12 @@ export class OpenAIProvider extends BaseProvider {
     }
   }
 
-  async *chat(modelId, messages, signal, frozenTabId) {
+  async *chat(modelId, messages, signal, frozenTabId, options = {}) {
     if (this.config.apiKeyRequired !== false && !this.apiKey) {
       throw new Error(`${this.config.name || 'OpenAI'} API Key is not configured.`);
     }
 
-    const tools = await getActiveTools();
+    const tools = await getActiveTools(options);
 
     // Convert multimodal content to OpenAI format
     const formattedMessages = messages.map(m => {

@@ -33,10 +33,10 @@ export class GeminiProvider extends BaseProvider {
     }
   }
 
-  async *chat(modelId, messages, signal, frozenTabId) {
+  async *chat(modelId, messages, signal, frozenTabId, options = {}) {
     if (!this.apiKey) throw new Error('Gemini API Key is not configured.');
 
-    const mcpTools = await getActiveTools();
+    const mcpTools = await getActiveTools(options);
 
     // Convert standard format to Gemini format
     const contents = messages.filter(m => m.role !== 'system').map(m => {

@@ -10,7 +10,7 @@ import { OpenCodeProvider } from './providers/opencode.js';
 import { OpenClawProvider } from './providers/openclaw.js';
 import { HermesProvider } from './providers/hermes.js';
 import { HuggingFaceProvider } from './providers/huggingface.js';
-import { resolveConfirmation, resolveModeSelection } from './tools.js';
+import { resolveConfirmation, resolveModeSelection, subagentManager, setCurrentActiveContext, resetTurnSubagentCount } from './tools.js';
 import {
   compactHistory,
   PRESERVED_RECENT_TURNS,
@@ -103,6 +103,7 @@ chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
   if (request.type === 'CLEAR_HISTORY') {
     currentSessionId = null;
     saveSessions();
+    subagentManager.clearSubagents();
     sendResponse({ ok: true });
     return true;
   }
@@ -187,6 +188,27 @@ chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
 
   if (request.type === 'GET_AGENT_PERMISSION_MODE') {
     vault.getAgentPermissionMode().then(res => sendResponse(res));
+    return true;
+  }
+
+  if (request.type === 'GET_SUBAGENTS') {
+    sendResponse({
+      activeCount: subagentManager.getActiveCount(),
+      subagents: subagentManager.getSubagents()
+    });
+    return true;
+  }
+
+  if (request.type === 'TERMINATE_SUBAGENT') {
+    const { subagentId } = request.payload || {};
+    const success = subagentManager.terminateSubagent(subagentId);
+    sendResponse({ ok: success });
+    return true;
+  }
+
+  if (request.type === 'CLEAR_SUBAGENTS') {
+    subagentManager.clearSubagents();
+    sendResponse({ ok: true });
     return true;
   }
 });
@@ -323,6 +345,14 @@ async function handleSendChat(payload) {
     emitStreamChunk(messageId, null, true, 'Provider not configured.');
     return;
   }
+
+  resetTurnSubagentCount();
+  setCurrentActiveContext({
+    provider,
+    modelId,
+    attachments: attachments || [],
+    pageContext
+  });
 
   const controller = new AbortController();
   activeGenerations.set(messageId, controller);

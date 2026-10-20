@@ -1,16 +1,19 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <title>Spin Your AI</title>
   <link rel="stylesheet" href="sidepanel.css">
   <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet">
 </head>
+
 <body>
   <div class="app-container">
     <header class="header glassmorphism">
       <div class="header-left" style="margin-right: 12px; display: flex; align-items: center;">
-        <button id="sessions-btn" class="icon-btn" title="Chat History"><span class="material-symbols-outlined">history</span></button>
+        <button id="sessions-btn" class="icon-btn" title="Chat History"><span
+            class="material-symbols-outlined">history</span></button>
       </div>
       <div class="model-combobox" id="model-combobox">
         <div class="model-combobox-trigger" id="model-trigger">
@@ -27,13 +30,19 @@
         </div>
       </div>
       <div class="header-actions">
-        <button id="agent-permission-btn" class="icon-btn" title="Agent Permission Mode"><span class="material-symbols-outlined">security</span></button>
-        <button id="compact-btn" class="icon-btn" title="Compact Context (Save Tokens)"><span class="material-symbols-outlined">compress</span></button>
-        <button id="reload-models-btn" class="icon-btn" title="Reload Models"><span class="material-symbols-outlined">refresh</span></button>
-        <button id="export-chat-btn" class="icon-btn" title="Export Chat"><span class="material-symbols-outlined">download</span></button>
-        <button id="new-chat-btn" class="icon-btn" title="New Chat"><span class="material-symbols-outlined">add</span></button>
+        <button id="agent-permission-btn" class="icon-btn" title="Agent Permission Mode"><span
+            class="material-symbols-outlined">security</span></button>
+        <button id="compact-btn" class="icon-btn" title="Compact Context (Save Tokens)"><span
+            class="material-symbols-outlined">compress</span></button>
+        <button id="reload-models-btn" class="icon-btn" title="Reload Models"><span
+            class="material-symbols-outlined">refresh</span></button>
+        <button id="export-chat-btn" class="icon-btn" title="Export Chat"><span
+            class="material-symbols-outlined">download</span></button>
+        <button id="new-chat-btn" class="icon-btn" title="New Chat"><span
+            class="material-symbols-outlined">add</span></button>
         <button id="help-btn" class="icon-btn" title="Help"><span class="material-symbols-outlined">help</span></button>
-        <button id="options-btn" class="icon-btn" title="Settings"><span class="material-symbols-outlined">settings</span></button>
+        <button id="options-btn" class="icon-btn" title="Settings"><span
+            class="material-symbols-outlined">settings</span></button>
       </div>
     </header>
 
@@ -45,10 +54,23 @@
     </main>
 
     <footer class="input-area glassmorphism">
+      <!-- Slash commands suggestions popover -->
+      <div id="slash-commands-popover" class="slash-commands-popover hidden">
+        <div class="slash-commands-header">
+          <span class="material-symbols-outlined" style="font-size: 14px; color: var(--text-ai, #7dd3fc);">terminal</span>
+          <span class="slash-commands-title">SLASH COMMANDS &amp; SKILLS</span>
+          <span class="slash-commands-hint">TAB / ENTER to select &bull; ESC to dismiss</span>
+        </div>
+        <div id="slash-commands-list" class="slash-commands-list">
+          <!-- Populated dynamically -->
+        </div>
+      </div>
+
       <div class="context-toggle">
         <label class="toggle-pill">
           <input type="checkbox" id="include-page-context">
-          <span class="pill-text"><span class="material-symbols-outlined" style="font-size:16px;vertical-align:middle">description</span> Include page content</span>
+          <span class="pill-text"><span class="material-symbols-outlined"
+              style="font-size:16px;vertical-align:middle">description</span> Include page content</span>
         </label>
       </div>
       <div id="attachment-preview" class="attachment-preview hidden"></div>
@@ -56,8 +78,9 @@
         <button id="attach-btn" class="icon-btn" title="Attach file">
           <span class="material-symbols-outlined">attach_file</span>
         </button>
-        <input type="file" id="file-input" class="hidden" multiple accept="image/*,audio/*,video/*,.pdf,.html,.htm,.css,.js,.ts,.json,.xml,.csv,.txt,.md,.py,.java,.c,.cpp,.go,.rs,.rb,.sh">
-        <textarea id="chat-input" placeholder="Ask anything..." rows="1"></textarea>
+        <input type="file" id="file-input" class="hidden" multiple
+          accept="image/*,audio/*,video/*,.pdf,.html,.htm,.css,.js,.ts,.json,.xml,.csv,.txt,.md,.py,.java,.c,.cpp,.go,.rs,.rb,.sh">
+        <textarea id="chat-input" placeholder="Ask anything... (/ for commands &amp; skills)" rows="1"></textarea>
         <button id="send-btn" class="send-btn">
           <span class="material-symbols-outlined">send</span>
         </button>
@@ -67,28 +90,29 @@
       </div>
     </footer>
 
-  <!-- Agent action confirmation banner (shown before destructive actions) -->
-  <div id="agent-confirm-banner" class="agent-confirm-banner hidden">
-    <div class="agent-confirm-header">
-      <span class="material-symbols-outlined" style="color:#a78bfa;font-size:18px;">smart_toy</span>
-      <span class="agent-confirm-title">AGENT ACTION REQUESTED</span>
-      <button id="agent-banner-change-mode-btn" class="agent-mode-switch-btn" title="Change Permission Mode">
-        <span class="material-symbols-outlined" style="font-size: 13px;">tune</span> <span id="agent-banner-mode-label">Allow Some</span>
-      </button>
+    <!-- Agent action confirmation banner (shown before destructive actions) -->
+    <div id="agent-confirm-banner" class="agent-confirm-banner hidden">
+      <div class="agent-confirm-header">
+        <span class="material-symbols-outlined" style="color:#a78bfa;font-size:18px;">smart_toy</span>
+        <span class="agent-confirm-title">AGENT ACTION REQUESTED</span>
+        <button id="agent-banner-change-mode-btn" class="agent-mode-switch-btn" title="Change Permission Mode">
+          <span class="material-symbols-outlined" style="font-size: 13px;">tune</span> <span
+            id="agent-banner-mode-label">Allow Some</span>
+        </button>
+      </div>
+      <div class="agent-confirm-body">
+        <span class="agent-confirm-tool" id="agent-confirm-tool-name"></span>
+        <pre class="agent-confirm-args" id="agent-confirm-args"></pre>
+      </div>
+      <div class="agent-confirm-actions">
+        <button id="agent-allow-btn" class="agent-btn agent-btn-allow">
+          <span class="material-symbols-outlined">check</span> ALLOW
+        </button>
+        <button id="agent-deny-btn" class="agent-btn agent-btn-deny">
+          <span class="material-symbols-outlined">block</span> DENY
+        </button>
+      </div>
     </div>
-    <div class="agent-confirm-body">
-      <span class="agent-confirm-tool" id="agent-confirm-tool-name"></span>
-      <pre class="agent-confirm-args" id="agent-confirm-args"></pre>
-    </div>
-    <div class="agent-confirm-actions">
-      <button id="agent-allow-btn" class="agent-btn agent-btn-allow">
-        <span class="material-symbols-outlined">check</span> ALLOW
-      </button>
-      <button id="agent-deny-btn" class="agent-btn agent-btn-deny">
-        <span class="material-symbols-outlined">block</span> DENY
-      </button>
-    </div>
-  </div>
   </div>
 
   <div id="sessions-modal" class="modal hidden">
@@ -101,20 +125,44 @@
     </div>
   </div>
 
+  <!-- Sub-Agents Monitor Modal -->
+  <div id="subagents-modal" class="modal hidden">
+    <div class="modal-content subagents-modal-content">
+      <div class="modal-header">
+        <div class="modal-title-wrapper" style="display: flex; align-items: center; gap: 8px;">
+          <span class="material-symbols-outlined" style="color: #38bdf8; font-size: 18px;">account_tree</span>
+          <h2 style="font-size: 13px; color: var(--text-main); font-weight: bold; letter-spacing: 0.08em; margin: 0;">
+            SUB-AGENTS MONITOR</h2>
+        </div>
+        <div style="display: flex; align-items: center; gap: 6px;">
+          <button id="clear-subagents-btn" class="icon-btn" title="Reset Inactive Sub-Agents"><span
+              class="material-symbols-outlined">delete_sweep</span></button>
+          <button id="close-subagents-btn" class="icon-btn" title="Close"><span
+              class="material-symbols-outlined">close</span></button>
+        </div>
+      </div>
+      <div class="modal-body subagents-list-body" id="subagents-list-container">
+        <!-- Sub-agent cards rendered dynamically -->
+      </div>
+    </div>
+  </div>
+
   <!-- Agent Permission Mode Modal (Popup Window) -->
   <div id="agent-mode-modal" class="modal hidden">
     <div class="modal-content agent-mode-content">
       <div class="modal-header">
         <div class="modal-title-wrapper" style="display: flex; align-items: center; gap: 8px;">
           <span class="material-symbols-outlined" style="color: #a78bfa; font-size: 18px;">security</span>
-          <h2 style="font-size: 13px; color: var(--text-main); font-weight: bold; letter-spacing: 0.08em; margin: 0;">BROWSER AGENT PERMISSIONS</h2>
+          <h2 style="font-size: 13px; color: var(--text-main); font-weight: bold; letter-spacing: 0.08em; margin: 0;">
+            BROWSER AGENT PERMISSIONS</h2>
         </div>
-        <button id="close-agent-mode-btn" class="icon-btn" title="Close"><span class="material-symbols-outlined">close</span></button>
+        <button id="close-agent-mode-btn" class="icon-btn" title="Close"><span
+            class="material-symbols-outlined">close</span></button>
       </div>
 
       <div class="agent-mode-body">
         <p class="agent-mode-intro">Select permission mode for browser agent tool calls on your active tab:</p>
-        
+
         <div class="mode-cards" id="mode-cards-container">
           <!-- Mode 1: Allow Some -->
           <label class="mode-card" data-mode="allow_some">
@@ -124,7 +172,8 @@
                 <span class="mode-card-title">ALLOW SOME</span>
                 <span class="mode-badge badge-prompt">PROMPT DESTRUCTIVE</span>
               </div>
-              <p class="mode-card-desc">Safe actions (inspect DOM, fill inputs) run automatically. Destructive actions (click, navigate, select) ask for confirmation first.</p>
+              <p class="mode-card-desc">Safe actions (inspect DOM, fill inputs) run automatically. Destructive actions
+                (click, navigate, select) ask for confirmation first.</p>
             </div>
           </label>
 
@@ -136,7 +185,8 @@
                 <span class="mode-card-title">ALLOW ALL</span>
                 <span class="mode-badge badge-auto">FULL AUTONOMOUS</span>
               </div>
-              <p class="mode-card-desc">Automatically executes all actions including destructive clicks, selects, and navigation without asking.</p>
+              <p class="mode-card-desc">Automatically executes all actions including destructive clicks, selects, and
+                navigation without asking.</p>
             </div>
           </label>
 
@@ -148,20 +198,23 @@
                 <span class="mode-card-title">ALLOW NONE</span>
                 <span class="mode-badge badge-block">STRICT READ-ONLY</span>
               </div>
-              <p class="mode-card-desc">Blocks all browser agent tool calls from interacting with or modifying the page.</p>
+              <p class="mode-card-desc">Blocks all browser agent tool calls from interacting with or modifying the page.
+              </p>
             </div>
           </label>
         </div>
 
         <div class="mode-remember-row">
-          <label class="checkbox-label" style="display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--text-muted); cursor: pointer;">
+          <label class="checkbox-label"
+            style="display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--text-muted); cursor: pointer;">
             <input type="checkbox" id="remember-agent-mode" checked style="accent-color: #a78bfa;">
             <span>Remember selection for future sessions</span>
           </label>
         </div>
       </div>
 
-      <div class="modal-footer" style="padding-top: 10px; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; gap: 8px;">
+      <div class="modal-footer"
+        style="padding-top: 10px; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; gap: 8px;">
         <button id="save-agent-mode-btn" class="agent-btn agent-btn-allow">
           <span class="material-symbols-outlined">check</span> SAVE &amp; PROCEED
         </button>
@@ -171,4 +224,5 @@
 
   <script type="module" src="sidepanel.js"></script>
 </body>
+
 </html>
