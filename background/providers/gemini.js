@@ -64,6 +64,8 @@ export class GeminiProvider extends BaseProvider {
     let toolCallCount = 0;
 
     while (true) {
+      if (signal?.aborted) break;
+
       const body = { contents: currentContents };
       
       if (systemInstruction) {
@@ -138,6 +140,7 @@ export class GeminiProvider extends BaseProvider {
       let modelParts = [];
 
       for await (const data of parseSSE(res)) {
+        if (signal?.aborted) break;
         const parts = data.candidates?.[0]?.content?.parts;
         if (!parts) continue;
         
@@ -151,6 +154,8 @@ export class GeminiProvider extends BaseProvider {
           }
         }
       }
+
+      if (signal?.aborted) break;
 
       if (toolCallsBuffer.length > 0) {
         toolCallCount++;
@@ -171,8 +176,16 @@ export class GeminiProvider extends BaseProvider {
 
         const functionResponses = await Promise.all(
           toolCallsBuffer.map(async (tc) => {
+            if (signal?.aborted) {
+              return {
+                functionResponse: {
+                  name: tc.name,
+                  response: { error: 'Aborted by user' }
+                }
+              };
+            }
             try {
-              const result = await executeTool(tc.name, tc.args, frozenTabId);
+              const result = await executeTool(tc.name, tc.args, frozenTabId, signal);
               let responsePayload = typeof result === 'object' && result !== null ? result : { result };
               const strRep = JSON.stringify(responsePayload);
               if (strRep.length > 8000) {
@@ -197,6 +210,8 @@ export class GeminiProvider extends BaseProvider {
           })
         );
         
+        if (signal?.aborted) break;
+
         currentContents.push({
           role: 'user',
           parts: functionResponses

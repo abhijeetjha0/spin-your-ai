@@ -260,3 +260,78 @@ test('SubagentManager - Execution lifecycle hooks for nesting guard', async () =
   assert.strictEqual(depth, 0);
 });
 
+test('SubagentManager - Force terminateAll active subagents', async () => {
+  const sm = new SubagentManager();
+
+  const hangingProvider = {
+    async *chat(modelId, messages, signal) {
+      yield 'Initial work...';
+      await new Promise(r => setTimeout(r, 200));
+      if (signal.aborted) return;
+      yield 'More work...';
+    }
+  };
+
+  const p1 = sm.spinSubagent({ role: 'Worker 1', task: 'Task 1', provider: hangingProvider });
+  const p2 = sm.spinSubagent({ role: 'Worker 2', task: 'Task 2', provider: hangingProvider });
+
+  await new Promise(r => setTimeout(r, 15));
+  assert.strictEqual(sm.getActiveCount(), 2);
+
+  const terminatedCount = sm.terminateAll();
+  assert.strictEqual(terminatedCount, 2);
+  assert.strictEqual(sm.getActiveCount(), 0);
+
+  const res1 = await p1;
+  const res2 = await p2;
+  assert.strictEqual(res1.status, 'cancelled');
+  assert.strictEqual(res2.status, 'cancelled');
+});
+
+test('SubagentManager - Parent signal abort chaining', async () => {
+  const sm = new SubagentManager();
+  const parentController = new AbortController();
+
+  const slowProvider = {
+    async *chat(modelId, messages, signal) {
+      yield 'Processing step 1...';
+      await new Promise(r => setTimeout(r, 200));
+      if (signal.aborted) return;
+      yield 'Processing step 2...';
+    }
+  };
+
+  const p = sm.spinSubagent({
+    role: 'Chained Worker',
+    task: 'Chained Task',
+    provider: slowProvider,
+    signal: parentController.signal
+  });
+
+  await new Promise(r => setTimeout(r, 15));
+  assert.strictEqual(sm.getActiveCount(), 1);
+
+  // Abort from parent
+  parentController.abort();
+
+  const res = await p;
+  assert.strictEqual(res.status, 'cancelled');
+  assert.strictEqual(sm.getActiveCount(), 0);
+});
+
+test('SubagentManager - Pre-aborted parent signal returns cancelled immediately', async () => {
+  const sm = new SubagentManager();
+  const parentController = new AbortController();
+  parentController.abort();
+
+  const res = await sm.spinSubagent({
+    role: 'Aborted Worker',
+    task: 'Pre-aborted task',
+    signal: parentController.signal
+  });
+
+  assert.strictEqual(res.status, 'cancelled');
+  assert.strictEqual(res.result, '[Aborted by user]');
+  assert.strictEqual(sm.getActiveCount(), 0);
+});
+

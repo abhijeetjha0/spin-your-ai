@@ -81,11 +81,11 @@
         <input type="file" id="file-input" class="hidden" multiple
           accept="image/*,audio/*,video/*,.pdf,.html,.htm,.css,.js,.ts,.json,.xml,.csv,.txt,.md,.py,.java,.c,.cpp,.go,.rs,.rb,.sh">
         <textarea id="chat-input" placeholder="Ask anything... (/ for commands &amp; skills)" rows="1"></textarea>
-        <button id="send-btn" class="send-btn">
+        <button id="send-btn" class="send-btn" title="Send message">
           <span class="material-symbols-outlined">send</span>
         </button>
-        <button id="stop-btn" class="stop-btn hidden">
-          <span class="material-symbols-outlined">stop_circle</span>
+        <button id="stop-btn" class="stop-btn hidden" title="Force Kill / Stop generation">
+          <span class="material-symbols-outlined">close</span>
         </button>
       </div>
     </footer>
@@ -135,6 +135,8 @@
             SUB-AGENTS MONITOR</h2>
         </div>
         <div style="display: flex; align-items: center; gap: 6px;">
+          <button id="terminate-all-subagents-btn" class="icon-btn" title="Force Kill All Sub-Agents" style="color: #ef4444;"><span
+              class="material-symbols-outlined">cancel</span></button>
           <button id="clear-subagents-btn" class="icon-btn" title="Reset Inactive Sub-Agents"><span
               class="material-symbols-outlined">delete_sweep</span></button>
           <button id="close-subagents-btn" class="icon-btn" title="Close"><span

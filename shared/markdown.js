@@ -37,7 +37,7 @@ function generateSubagentsHtml(subagents, activeCount = 0) {
     }
 
     const termBtnHtml = isWorkingSa 
-      ? `<button type="button" class="subagent-terminate-btn" data-subagent-id="${escapeSubagentHtml(sa.id)}">Terminate</button>` 
+      ? `<button type="button" class="subagent-terminate-btn" data-subagent-id="${escapeSubagentHtml(sa.id)}" title="Force Kill Sub-Agent"><span class="material-symbols-outlined" style="font-size:13px;vertical-align:middle;margin-right:2px;">close</span>Terminate</button>` 
       : '';
 
     return `
@@ -59,6 +59,10 @@ function generateSubagentsHtml(subagents, activeCount = 0) {
     `;
   }).join('');
 
+  const killAllBtnHtml = isWorking 
+    ? `<button type="button" class="subagents-kill-all-btn" title="Force Kill All Sub-Agents" style="color:#ef4444;background:#1a0000;border:1px solid #7f1d1d;padding:2px 8px;font-family:inherit;font-size:11px;cursor:pointer;display:inline-flex;align-items:center;gap:3px;"><span class="material-symbols-outlined" style="font-size:13px;">cancel</span> Kill All</button>` 
+    : '';
+
   return `
     <div class="midprocess-subagents-block">
       <div class="midprocess-subagents-header">
@@ -68,9 +72,12 @@ function generateSubagentsHtml(subagents, activeCount = 0) {
           <span class="subagents-count-badge ${isWorking ? 'working' : ''}">${countLabel}</span>
           ${pulseHtml}
         </div>
-        <button type="button" class="subagent-reset-btn" title="Reset Inactive Sub-Agents">
-          <span class="material-symbols-outlined" style="font-size:14px;vertical-align:middle;">delete_sweep</span> Reset
-        </button>
+        <div style="display: flex; gap: 6px; align-items: center;">
+          ${killAllBtnHtml}
+          <button type="button" class="subagent-reset-btn" title="Reset Inactive Sub-Agents">
+            <span class="material-symbols-outlined" style="font-size:14px;vertical-align:middle;">delete_sweep</span> Reset
+          </button>
+        </div>
       </div>
       <div class="midprocess-subagents-list">
         ${cardsHtml}

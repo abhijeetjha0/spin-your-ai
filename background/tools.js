@@ -1,8 +1,8 @@
 import { vault } from './vault.js';
-import { BROWSER_AGENT_TOOLS, executeAgentTool, resolveConfirmation, resolveModeSelection } from './agent_tools.js';
+import { BROWSER_AGENT_TOOLS, executeAgentTool, resolveConfirmation, resolveModeSelection, cancelPendingAgentActions } from './agent_tools.js';
 import { subagentManager } from '../shared/subagentManager.js';
 
-export { resolveConfirmation, resolveModeSelection, subagentManager };
+export { resolveConfirmation, resolveModeSelection, cancelPendingAgentActions, subagentManager };
 
 export const MAX_SUBAGENTS_PER_TURN = 5;
 
@@ -81,9 +81,17 @@ subagentManager.onStatusChange((payload) => {
  * @param {string} toolName 
  * @param {object} args 
  * @param {number} frozenTabId
+ * @param {AbortSignal} [signal]
  * @returns {Promise<any>}
  */
-export async function executeTool(toolName, args, frozenTabId) {
+export async function executeTool(toolName, args, frozenTabId, signal = null) {
+  const activeSignal = signal || currentActiveContext.signal;
+  if (activeSignal?.aborted) {
+    return {
+      error: 'Action cancelled: generation was aborted by user.'
+    };
+  }
+
   // Built-in autonomous subagent tool
   if (toolName === 'spin_subagent') {
     // 1. Strict Recursion Guard: Sub-agents are leaf agents and cannot spawn nested sub-agents
@@ -111,7 +119,8 @@ export async function executeTool(toolName, args, frozenTabId) {
       attachments: currentActiveContext.attachments,
       pageContext: currentActiveContext.pageContext,
       frozenTabId,
-      maxTurns: args.max_turns || 12
+      maxTurns: args.max_turns || 12,
+      signal: activeSignal
     });
   }
 

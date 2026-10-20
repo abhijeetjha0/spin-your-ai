@@ -1,8 +1,8 @@
 # Spin Your AI - Agent Rules & Guidelines
 
-Welcome to **Spin Your AI**, a Chrome Extension (Manifest V3) designed to spin up AI models directly from the browser sidebar, supporting a wide range of cloud and local providers (OpenAI, Anthropic, Gemini, OpenRouter, OpenCode, OpenCode Zen, MCP, etc.) with multimodality and page context awareness.
+Welcome to **Spin Your AI**, a Chrome Extension (Manifest V3) designed to spin up AI models directly from the browser sidebar, supporting a wide range of cloud and local providers (OpenAI, Anthropic, Gemini, OpenRouter, OpenCode, OpenCode Zen, Hugging Face, Ollama Cloud, Ollama, Hermes Desktop, OpenClaw, MCP, etc.) with multimodality, page context awareness, and autonomous tool execution.
 
-When contributing to this project, adhere to the following rules and design philosophies established by the user.
+When contributing to this project, adhere strictly to the following rules and design philosophies established by the user.
 
 ## 1. Design Language & UI/UX
 - **Theme:** Strict Terminal / Hacker aesthetic. 
@@ -18,34 +18,62 @@ When contributing to this project, adhere to the following rules and design phil
   - **Muted Text:** `#94a3b8` (`--text-muted`)
 - **Scrollbars:** Custom, dark, solid, and blocky. No `border-radius`. Thumb should be `#333`, track `#000`.
 - **Icons:** Strictly use Google Material Symbols (`<span class="material-symbols-outlined">...</span>`). Do **NOT** use unicode emojis (e.g., ⚙️, ✅, ❌) anywhere in the UI or chat streams.
-- **Loading States:** Use hacker-themed, randomized action phrases (e.g., "Bypassing mainframe...", "Synthesizing data...") during AI generation instead of static "Loading..." text.
+- **Loading States:** Use hacker-themed, randomized action phrases (e.g., "Bypassing mainframe...", "Synthesizing data...", "Compiling token stream...") during AI generation instead of static "Loading..." text.
 
 ## 2. Terminology & Copywriting
-- **Proper Nouns:** Ensure all AI providers and services are capitalized correctly in the UI and toast notifications (e.g., "OpenAI", not "openai"; "OpenCode Zen", not "opencode_zen").
-- **Reset vs. Delete:** Always use the term **"Reset"** instead of "Delete" when referring to clearing a configuration or deleting credentials.
+- **Proper Nouns:** Ensure all AI providers and services are capitalized correctly in the UI and toast notifications (e.g., "OpenAI", not "openai"; "OpenCode Zen", not "opencode_zen"; "Ollama Cloud", not "ollama_cloud").
+- **Reset vs. Delete:** Always use the term **"Reset"** instead of "Delete" when referring to clearing a configuration, resetting credentials, or resetting chat history.
 
 ## 3. Data Privacy & Security
-- **Strictly Local:** Customer private keys and API credentials MUST never be leaked. All configuration data must be stored securely using `chrome.storage.local` (managed by `vault.js`). Do not use `chrome.storage.sync` or external endpoints to store credentials.
+- **Strictly Local Storage:** Customer private keys and API credentials MUST never be leaked or logged to external servers. All configuration data must be stored securely using `chrome.storage.local` (managed by `vault.js`). Do not use `chrome.storage.sync` or external endpoints to store credentials.
 
 ## 4. Architecture & Coding Practices
-- **Vanilla Stack:** Use vanilla HTML, CSS, and JavaScript. Do not introduce Tailwind CSS or frontend frameworks (React, Vue, Next.js).
+- **Vanilla Stack:** Use vanilla HTML, CSS, and JavaScript. Do not introduce Tailwind CSS or frontend frameworks (React, Vue, Next.js) to keep the extension lean, high-performing, and free of unnecessary dependencies.
 - **File Structure:**
-  - `sidepanel/`: Contains the main Chat UI (`sidepanel.html`, `sidepanel.js`, `sidepanel.css`).
-  - `options/`: Contains the Configuration UI. Follows standard entry file conventions (`index.html`, `index.js`, `index.css`).
-  - `background/`: Contains the Service Worker (`background.js`) and provider logic (`providers/*.js`). Background script handles API streaming, connection testing, and MCP tool-calling (`tools.js`).
-  - `content/`: Contains content scripts (`content.js`) for extracting webpage context.
-- **Auto-Scrolling:** When streaming text in the chat UI, implement "Smart Scrolling": only auto-scroll (`scrollTop = scrollHeight`) if the user is already near the bottom (within a ~150px threshold). This prevents "jitter" and dizziness if the user tries to scroll up while the model is generating.
-- **Toasts:** Prevent toast notifications from stacking on top of each other. The UI should automatically clear any existing toasts before displaying a new one.
+  - `sidepanel/`: Contains the main Chat UI (`sidepanel.html`, `sidepanel.js`, `sidepanel.css`, `markdown.js`, `slash_commands.js`).
+  - `options/`: Contains the Configuration UI (`index.html`, `index.js`, `index.css`).
+  - `background/`: Contains the Service Worker (`background.js`), provider implementations (`providers/*.js`), Model Context Protocol and tool registry (`tools.js`), browser automation tools (`agent_tools.js`), context compactor (`context_compactor.js`), and sub-agent execution manager (`subagents.js`).
+  - `content/`: Contains content scripts (`content.js`) for DOM interactions and webpage context extraction.
+  - `test/`: Contains the unit test suite executed via the native Node.js test runner.
+- **Auto-Scrolling:** When streaming text in the chat UI, implement "Smart Scrolling": only auto-scroll (`scrollTop = scrollHeight`) if the user is already near the bottom (within a ~150px threshold). This prevents "jitter" and disorientation if the user scrolls up while the model is generating.
+- **Toasts:** Prevent toast notifications from stacking on top of each other. The UI must automatically clear any existing toast before displaying a new one.
 - **MCP Integration:** When adding tools or capabilities, use the dynamic Model Context Protocol (MCP) tool registry via `tools.js`. Ensure MCP configurations are stored as JSON in `vault.js`.
-- **Gemini API Quirks:** The Gemini REST API is extremely strict. 
+- **Gemini API Quirks:** The Gemini REST API is extremely strict:
   - Tool schemas cannot contain `$schema` or `exclusiveMinimum`.
   - Arrays for types (e.g., `["string", "null"]`) are rejected; use `type: "STRING", nullable: true` instead.
-  - For newer reasoning models (Gemini 1.5/2.0), the entire `parts` array generated by the model (including the opaque `thought_signature`) must be echoed back exactly as received during a multi-turn tool call, otherwise the API will return a 400 error.
-  - The tool execution result must be sent back with the `user` role (not `function`).
+  - For reasoning models (Gemini 1.5/2.0), the entire `parts` array generated by the model (including opaque `thought_signature`) must be echoed back exactly as received during multi-turn tool calls, otherwise the API returns a 400 error.
+  - Tool execution results must be sent back with the `user` role (not `function`).
 - **Sidebar Logic:** Always wrap asynchronous side panel configurations (e.g., `chrome.sidePanel.setPanelBehavior`) inside `chrome.runtime.onInstalled.addListener` to prevent race conditions in Manifest V3 service workers.
-- **Browser Automation Agent:** The extension natively provides browser interaction tools (`browser_click`, `browser_fill`, `browser_navigate`, etc.) defined in `background/agent_tools.js`. 
-  - To avoid host permissions errors on non-localhost domains, DOM actions are routed to the page via `chrome.tabs.sendMessage` to `content/content.js`. Do not use `chrome.scripting.executeScript` for general DOM interactions.
-  - Destructive actions (like click, select, drag_drop, navigate) are automatically intercepted and require user confirmation via the side panel. Safe actions (like reading the DOM or filling inputs) are executed automatically.
-  - The agent works on a "frozen tab" basis—the tab ID is captured at the start of the turn so the user can switch tabs without breaking the execution flow.
 
-Follow these instructions whenever making modifications or adding new features to maintain the aesthetic integrity and security standards of the extension.
+## 5. Browser Automation Agent
+- The extension natively provides browser interaction tools (`browser_click`, `browser_fill`, `browser_navigate`, `browser_scroll`, `browser_extract_text`, `browser_get_dom`) defined in `background/agent_tools.js`.
+- **DOM Routing:** To avoid host permissions errors on non-localhost domains, DOM actions are routed to the target page via `chrome.tabs.sendMessage` to `content/content.js`. Do not use `chrome.scripting.executeScript` for general DOM interactions.
+- **Permission Confirmation:** Destructive actions (such as `browser_click`, `browser_navigate`, select, or drag-and-drop) are intercepted and require explicit user approval via interactive prompt cards in the side panel. Safe read-only actions (such as reading the DOM or extracting text) execute automatically.
+- **Frozen Tab Execution:** The active tab ID is captured at the initiation of the agent turn, ensuring background execution remains pinned to the target tab even if the user switches active browser tabs.
+
+## 6. Sub-Agents & Multi-Agent Architecture
+- **Autonomous Leaf Workers:** Capability-aware models can dynamically spin up specialized sub-agents (`spin_subagent` tool via `background/subagents.js`) with isolated, inherited task context for multimodal analysis, deep research, or workspace inspection.
+- **Leaf Recursion Guard:** Sub-agents must execute strictly as leaf workers. Nested sub-agent creation (`spin_subagent` from within a sub-agent) is blocked by design (`isSubagent: true`).
+- **Turn Limits & Deadlock Prevention:** Enforce strict turn limits (`MAX_TURNS_PER_SESSION`) and cap concurrent sub-agents per turn to prevent runaway loops and runaway token usage.
+- **Cancellation & Force Termination:** Sub-agent executions must chain to parent `AbortSignal`s. Clicking the UI stop/cross button invokes `terminateAllActive()` to immediately abort all running worker tasks and prevent lingering background processes.
+- **Live Monitor Modal & Badging:** The sidepanel header features a live counter badge (`N Working`) and an interactive Sub-Agents Monitor modal to inspect individual sub-agent reasoning, context snapshots, and status transitions.
+
+## 7. Slash Commands & Dynamic Workspace Skills
+- **Slash Commands Popover:** Typing `/` in the chat input opens an interactive popover featuring fuzzy search, category badges (System, Builtin, Skill), and full keyboard navigation (Up, Down, Enter, Escape).
+- **Dynamic Skills Discovery:** Dynamic skills from `.agents/skills/**/SKILL.md` are parsed with YAML frontmatter without hardcoded definitions, enabling extensible custom workflows.
+- **Built-in System Shortcuts:** Includes standard system commands (`/help`, `/clear`, `/history`, `/compact`, `/subagents`, `/settings`) for rapid keyboard-driven control.
+
+## 8. Tool Caching & Smart Output Truncation
+- **In-Memory Tool Cache:** Idempotent read operations (`browser_get_dom`, `browser_extract_text`, page context) are cached in-memory during active sessions to eliminate redundant round-trip latency.
+- **State Invalidation:** Any state-modifying action (e.g., `browser_click`, `browser_fill`, `browser_navigate`) instantly invalidates the tool cache to maintain data fidelity.
+- **Smart Truncation:** Large tool outputs are safely truncated using `smartTruncate`, which preserves both top and bottom context lines alongside an omission indicator (`... [N lines omitted] ...`), protecting model context limits while preserving essential output boundaries.
+
+## 9. Context Compactor & Tab-Scoped Session Management
+- **Context Compactor (`context_compactor.js`):** Verbose earlier conversation turns can be compacted on demand (via `/compact` or the UI badge) or automatically when exceeding turn or token thresholds (`AUTO_COMPACT_MIN_TURNS`, `AUTO_COMPACT_TOKEN_THRESHOLD`).
+- **Graceful Fallback:** If AI-assisted summarization fails or is unsupported, the system falls back to deterministic structured compaction to ensure chat continuity without token overflow.
+- **Tab-Scoped Chat Isolation (`tabSessionManager.js`):** Sessions are isolated and mapped per Chrome tab (`tabId`). Navigating to a newly opened tab presents a clean chat box without saving empty sessions. Sessions are created only when the user inputs a message. Returning to a previously opened tab restores that tab's session, history, compacted status, and in-flight stream state.
+- **Multi-Session Management:** Supports creating, switching, and resetting multiple persistent conversation sessions stored securely in `chrome.storage.local`.
+
+## 10. Testing & Verification
+- Run the extension test suite using `npm test` (executed via the Node.js built-in test runner: `node --test test/**/*.test.js`).
+- Ensure all tests pass (43/43+) and that any new tool, provider, or state handler includes corresponding isolated unit tests before committing changes.

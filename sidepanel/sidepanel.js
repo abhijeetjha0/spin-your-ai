@@ -74,6 +74,93 @@ const sessionsList = document.getElementById('sessions-list');
 
 let allSessions = [];
 let currentSessionId = null;
+let currentTabId = null;
+
+async function getActiveTab() {
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (tab) return tab;
+    const [lastTab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+    return lastTab || null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function removeCompactedBadge() {
+  const existing = document.getElementById('compact-badge');
+  if (existing) {
+    existing.remove();
+  }
+}
+
+function clearChatUI() {
+  chatContainer.innerHTML = '<div class="message system-msg">Welcome to Spin Your AI! Select a model and start chatting.</div>';
+  removeCompactedBadge();
+  currentSubagents = [];
+  activeSubagentsCount = 0;
+  updateSubagentsUI(0, []);
+  if (isGenerating) {
+    finishGeneration();
+  }
+  clearAttachments();
+}
+
+async function syncTabSession(tabId) {
+  if (!tabId) return;
+  currentTabId = tabId;
+
+  try {
+    const res = await chrome.runtime.sendMessage({
+      type: 'GET_TAB_SESSION',
+      payload: { tabId }
+    });
+
+    if (!res) return;
+
+    currentSessionId = res.sessionId; // null if clean tab
+
+    if (res.sessionId && res.history && res.history.length > 0) {
+      renderHistory(res.history);
+      if (res.compactedCount) {
+        renderCompactedBadge(res.compactedCount, res.savedTokens, true);
+      } else {
+        removeCompactedBadge();
+      }
+
+      if (res.isGenerating) {
+        isGenerating = true;
+        currentMessageId = res.generatingMessageId;
+        currentAiText = res.generatingText || '';
+        chatInput.disabled = true;
+        attachBtn.disabled = true;
+        chatInput.placeholder = "Processing...";
+        sendBtn.classList.add('hidden');
+        stopBtn.classList.remove('hidden');
+
+        let aiMsgEl = document.getElementById(`msg-${currentMessageId}`);
+        if (!aiMsgEl) {
+          aiMsgEl = appendMessage('AI', '', 'ai-msg', currentMessageId);
+        }
+        if (currentAiText) {
+          aiMsgEl.innerHTML = renderMarkdown(currentAiText, {
+            subagents: currentSubagents,
+            activeCount: activeSubagentsCount
+          });
+        } else {
+          aiMsgEl.innerHTML = '<span class="typing-indicator">Establishing uplink...</span>';
+        }
+      } else if (isGenerating) {
+        finishGeneration();
+      }
+    } else {
+      // Clean tab: nothing entered or worked on yet!
+      clearChatUI();
+    }
+  } catch (e) {
+    // Graceful fallback
+  }
+}
 
 // Combobox state
 let allModels = [];         // [{providerId, providerName, modelId, modelName}]
@@ -100,7 +187,7 @@ async function init() {
     const [providerId, modelId] = (selectedModelValue || '').split('::');
     const res = await chrome.runtime.sendMessage({
       type: 'COMPACT_CONTEXT',
-      payload: { providerId, modelId }
+      payload: { providerId, modelId, tabId: currentTabId }
     });
     if (res && res.ok) {
       renderCompactedBadge(res.compactedCount, res.savedTokens);
@@ -146,7 +233,7 @@ async function init() {
       return;
     }
 
-    // 2. Terminate subagent
+    // 2. Terminate single subagent
     const termBtn = e.target.closest('.subagent-terminate-btn');
     if (termBtn) {
       const subagentId = termBtn.dataset.subagentId;
@@ -172,9 +259,29 @@ async function init() {
       if (res) updateSubagentsUI(res.activeCount, res.subagents);
       return;
     }
+
+    // 4. Force kill all subagents
+    const killAllBtn = e.target.closest('.subagents-kill-all-btn');
+    if (killAllBtn) {
+      killAllBtn.disabled = true;
+      killAllBtn.textContent = 'Stopping all...';
+      await chrome.runtime.sendMessage({ type: 'TERMINATE_ALL_SUBAGENTS' });
+      const res = await chrome.runtime.sendMessage({ type: 'GET_SUBAGENTS' });
+      if (res) updateSubagentsUI(res.activeCount, res.subagents);
+      return;
+    }
   });
 
   // Subagents handlers
+  const terminateAllSubagentsBtn = document.getElementById('terminate-all-subagents-btn');
+  terminateAllSubagentsBtn?.addEventListener('click', async () => {
+    terminateAllSubagentsBtn.disabled = true;
+    await chrome.runtime.sendMessage({ type: 'TERMINATE_ALL_SUBAGENTS' });
+    const res = await chrome.runtime.sendMessage({ type: 'GET_SUBAGENTS' });
+    if (res) updateSubagentsUI(res.activeCount, res.subagents);
+    terminateAllSubagentsBtn.disabled = false;
+  });
+
   subagentsStatusBtn?.addEventListener('click', () => {
     subagentsModal?.classList.remove('hidden');
     renderSubagentsList();
@@ -401,20 +508,43 @@ async function init() {
   fileInput.addEventListener('change', handleFileSelect);
   
   stopBtn.addEventListener('click', () => {
-    if (isGenerating && currentMessageId) {
+    // FORCE KILL: immediately stop generation in UI and notify background
+    if (isGenerating || currentMessageId) {
+      const msgIdToStop = currentMessageId;
+
+      // Notify background to abort LLM requests and force-terminate all sub-agents
       chrome.runtime.sendMessage({ 
         type: 'STOP_GENERATION', 
-        payload: { messageId: currentMessageId } 
-      });
-      // Do not call finishGeneration() here.
-      // Wait for background worker to abort and send the final chunk.
+        payload: { messageId: msgIdToStop, tabId: currentTabId } 
+      }).catch(() => {});
+
+      // Append [Aborted by user] if message container exists
+      if (msgIdToStop) {
+        const msgEl = document.getElementById(`msg-${msgIdToStop}`);
+        if (msgEl) {
+          if (!currentAiText) {
+            msgEl.innerHTML = '';
+          }
+          currentAiText += '\n\n**[Aborted by user]**';
+          msgEl.innerHTML = renderMarkdown(currentAiText, {
+            subagents: currentSubagents,
+            activeCount: 0
+          });
+        }
+      }
+
+      // Immediately restore UI state to allow user to continue chatting
+      finishGeneration();
     }
   });
 
   // Setup sessions modal
   sessionsBtn.addEventListener('click', () => {
     sessionsModal.classList.remove('hidden');
-    chrome.runtime.sendMessage({ type: 'GET_SESSIONS' }).then(res => {
+    chrome.runtime.sendMessage({ 
+      type: 'GET_SESSIONS',
+      payload: { tabId: currentTabId }
+    }).then(res => {
       if (res) {
         allSessions = res.sessions || [];
         currentSessionId = res.currentSessionId;
@@ -433,21 +563,53 @@ async function init() {
     }
   });
 
-  // Restore history and sessions
-  chrome.runtime.sendMessage({ type: 'GET_SESSIONS' }).then(res => {
+  // Restore history and session by matching active tab
+  const activeTab = await getActiveTab();
+  if (activeTab) {
+    await syncTabSession(activeTab.id);
+  } else {
+    clearChatUI();
+  }
+
+  // Pre-load all sessions for modal
+  chrome.runtime.sendMessage({ 
+    type: 'GET_SESSIONS', 
+    payload: { tabId: currentTabId } 
+  }).then(res => {
     if (res) {
       allSessions = res.sessions || [];
-      currentSessionId = res.currentSessionId;
+      if (res.currentSessionId) {
+        currentSessionId = res.currentSessionId;
+      }
     }
-    chrome.runtime.sendMessage({ type: 'GET_HISTORY' }).then(h => {
-      if (h && h.history) {
-        renderHistory(h.history);
-        if (h.compactedCount) {
-          renderCompactedBadge(h.compactedCount, h.savedTokens, true);
-        }
+  });
+
+  // Listen for tab switching to reflect the active tab's session
+  if (typeof chrome !== 'undefined' && chrome.tabs && chrome.tabs.onActivated) {
+    chrome.tabs.onActivated.addListener(async (activeInfo) => {
+      if (activeInfo && activeInfo.tabId !== currentTabId) {
+        await syncTabSession(activeInfo.tabId);
       }
     });
-  });
+  }
+
+  if (typeof chrome !== 'undefined' && chrome.windows && chrome.windows.onFocusChanged) {
+    chrome.windows.onFocusChanged.addListener(async (windowId) => {
+      if (windowId === chrome.windows.WINDOW_ID_NONE) return;
+      const tab = await getActiveTab();
+      if (tab && tab.id !== currentTabId) {
+        await syncTabSession(tab.id);
+      }
+    });
+  }
+
+  if (typeof chrome !== 'undefined' && chrome.tabs && chrome.tabs.onReplaced) {
+    chrome.tabs.onReplaced.addListener(async (addedTabId, removedTabId) => {
+      if (removedTabId === currentTabId) {
+        await syncTabSession(addedTabId);
+      }
+    });
+  }
 
   // Listen for active model changes, stream chunks, session updates, and agent confirmations
   chrome.runtime.onMessage.addListener((msg, _sender, _sendResponse) => {
@@ -456,10 +618,14 @@ async function init() {
     } else if (msg.type === 'PROVIDERS_UPDATED') {
       loadProviders();
     } else if (msg.type === 'CONTEXT_COMPACTED') {
-      renderCompactedBadge(msg.payload.compactedCount, msg.payload.savedTokens);
+      if (!msg.payload.tabId || msg.payload.tabId === currentTabId) {
+        renderCompactedBadge(msg.payload.compactedCount, msg.payload.savedTokens);
+      }
     } else if (msg.type === 'UPDATE_SESSIONS') {
       allSessions = msg.payload.sessions || [];
-      currentSessionId = msg.payload.currentSessionId;
+      if (!msg.payload.tabId || msg.payload.tabId === currentTabId) {
+        currentSessionId = msg.payload.currentSessionId;
+      }
       renderSessionsList();
     } else if (msg.type === 'AGENT_CONFIRM_ACTION') {
       showAgentConfirmBanner(msg.payload);
@@ -699,6 +865,11 @@ async function sendMessage() {
   sendBtn.classList.add('hidden');
   stopBtn.classList.remove('hidden');
 
+  if (!currentTabId) {
+    const tab = await getActiveTab();
+    if (tab) currentTabId = tab.id;
+  }
+
   // Send to background
   chrome.runtime.sendMessage({
     type: 'SEND_CHAT',
@@ -708,7 +879,9 @@ async function sendMessage() {
       modelId,
       text,
       pageContext,
-      attachments
+      attachments,
+      tabId: currentTabId,
+      frozenTabId: currentTabId
     }
   });
 }
@@ -820,17 +993,13 @@ function finishGeneration() {
 }
 
 function clearChat() {
-  chatContainer.innerHTML = '<div class="message system-msg">Welcome to Spin Your AI! Select a model and start chatting.</div>';
-  chrome.runtime.sendMessage({ type: 'CLEAR_HISTORY' });
+  clearChatUI();
+  chrome.runtime.sendMessage({ 
+    type: 'CLEAR_HISTORY',
+    payload: { tabId: currentTabId }
+  });
   chrome.runtime.sendMessage({ type: 'CLEAR_SUBAGENTS' });
-  currentSubagents = [];
-  activeSubagentsCount = 0;
-  isGenerating = false;
-  currentMessageId = null;
-  currentAiText = '';
-  stopBtn.classList.add('hidden');
-  sendBtn.classList.remove('hidden');
-  clearAttachments();
+  currentSessionId = null;
 }
 
 // --- File attachment handling ---
@@ -902,7 +1071,10 @@ function getFileIcon(mimeType) {
 }
 
 async function exportChat() {
-  const res = await chrome.runtime.sendMessage({ type: 'EXPORT_CHAT' });
+  const res = await chrome.runtime.sendMessage({ 
+    type: 'EXPORT_CHAT',
+    payload: { tabId: currentTabId }
+  });
   if (!res || !res.ok || !res.messages || res.messages.length === 0) {
     showToast('No chat history to export.');
     return;
@@ -957,17 +1129,17 @@ function renderSessionsList() {
     deleteBtn.className = 'material-symbols-outlined';
     deleteBtn.textContent = 'delete';
     deleteBtn.style = 'font-size: 16px; cursor: pointer; color: var(--text-muted); padding: 2px; border-radius: 4px;';
-    deleteBtn.title = 'Delete Session';
+    deleteBtn.title = 'Reset Session';
     
     deleteBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       chrome.runtime.sendMessage({ type: 'DELETE_SESSION', payload: { sessionId: session.id } }).then(() => {
         allSessions = allSessions.filter(s => s.id !== session.id);
         if (currentSessionId === session.id) {
-            currentSessionId = allSessions.length > 0 ? allSessions[0].id : null;
+          currentSessionId = null;
+          clearChatUI();
         }
         renderSessionsList();
-        chrome.runtime.sendMessage({ type: 'GET_HISTORY' }).then(h => renderHistory(h ? h.history : []));
       });
     });
     
@@ -977,10 +1149,18 @@ function renderSessionsList() {
     item.appendChild(deleteBtn);
     
     item.addEventListener('click', () => {
-      chrome.runtime.sendMessage({ type: 'SWITCH_SESSION', payload: { sessionId: session.id } }).then(res => {
+      chrome.runtime.sendMessage({ 
+        type: 'SWITCH_SESSION', 
+        payload: { sessionId: session.id, tabId: currentTabId } 
+      }).then(res => {
         if (res && res.history) {
           currentSessionId = session.id;
           renderHistory(res.history);
+          if (res.compactedCount) {
+            renderCompactedBadge(res.compactedCount, res.savedTokens, true);
+          } else {
+            removeCompactedBadge();
+          }
           sessionsModal.classList.add('hidden');
         }
       });
@@ -1001,7 +1181,7 @@ function updateSubagentsUI(activeCount, subagents) {
     ? document.getElementById(`msg-${currentMessageId}`)
     : chatContainer.querySelector('.message.ai-msg:last-of-type');
 
-  if (targetMsgEl && currentAiText) {
+  if (targetMsgEl && (currentAiText || (currentSubagents && currentSubagents.length > 0))) {
     targetMsgEl.innerHTML = renderMarkdown(currentAiText, {
       subagents: currentSubagents,
       activeCount: activeSubagentsCount
@@ -1087,12 +1267,17 @@ function renderSubagentsList() {
     if (sa.status === 'working') {
       const termBtn = document.createElement('button');
       termBtn.className = 'subagent-terminate-btn';
-      termBtn.textContent = 'Terminate';
-      termBtn.addEventListener('click', () => {
-        chrome.runtime.sendMessage({
+      termBtn.innerHTML = '<span class="material-symbols-outlined" style="font-size:13px;vertical-align:middle;margin-right:2px;">close</span> Terminate';
+      termBtn.title = 'Force Kill Sub-Agent';
+      termBtn.addEventListener('click', async () => {
+        termBtn.disabled = true;
+        termBtn.textContent = 'Stopping...';
+        await chrome.runtime.sendMessage({
           type: 'TERMINATE_SUBAGENT',
           payload: { subagentId: sa.id }
         });
+        const res = await chrome.runtime.sendMessage({ type: 'GET_SUBAGENTS' });
+        if (res) updateSubagentsUI(res.activeCount, res.subagents);
       });
       actions.appendChild(termBtn);
     }

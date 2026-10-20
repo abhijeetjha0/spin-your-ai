@@ -75,6 +75,15 @@ export const vault = {
     return data.currentSessionId || null;
   },
 
+  async saveTabSessions(tabSessions) {
+    await chrome.storage.local.set({ tabSessions });
+  },
+
+  async getTabSessions() {
+    const data = await chrome.storage.local.get('tabSessions');
+    return data.tabSessions || {};
+  },
+
   async getAgentPermissionMode() {
     const data = await chrome.storage.local.get(['agentPermissionMode', 'agentPermissionModePrompted']);
     return {

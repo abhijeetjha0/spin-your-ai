@@ -10,7 +10,7 @@ import { OpenCodeProvider } from './providers/opencode.js';
 import { OpenClawProvider } from './providers/openclaw.js';
 import { HermesProvider } from './providers/hermes.js';
 import { HuggingFaceProvider } from './providers/huggingface.js';
-import { resolveConfirmation, resolveModeSelection, subagentManager, setCurrentActiveContext, resetTurnSubagentCount } from './tools.js';
+import { resolveConfirmation, resolveModeSelection, cancelPendingAgentActions, subagentManager, setCurrentActiveContext, resetTurnSubagentCount } from './tools.js';
 import {
   compactHistory,
   PRESERVED_RECENT_TURNS,
@@ -18,6 +18,7 @@ import {
   AUTO_COMPACT_TOKEN_THRESHOLD,
   estimateHistoryTokens
 } from '../shared/contextCompactor.js';
+import { tabSessionManager } from '../shared/tabSessionManager.js';
 
 // Setup side panel behavior to open on action click
 chrome.runtime.onInstalled.addListener(() => {
@@ -26,21 +27,42 @@ chrome.runtime.onInstalled.addListener(() => {
 
 // Active generation controllers for cancelling
 const activeGenerations = new Map();
+const activeTabGenerations = new Map(); // tabId -> { messageId, controller, text }
 let allSessions = [];
 let currentSessionId = null;
 
-vault.getSessions().then(s => allSessions = s);
-vault.getCurrentSessionId().then(id => currentSessionId = id);
+Promise.all([
+  vault.getSessions(),
+  vault.getTabSessions(),
+  vault.getCurrentSessionId()
+]).then(([sessions, tabSessions, savedCurrentId]) => {
+  tabSessionManager.loadState({ sessions, tabSessions });
+  allSessions = tabSessionManager.getAllSessions();
+  currentSessionId = savedCurrentId;
+});
 
-async function getCurrentHistory() {
-  if (!currentSessionId) return [];
-  const s = allSessions.find(s => s.id === currentSessionId);
-  return s ? s.history : [];
+async function persistSessionState() {
+  await vault.saveSessions(tabSessionManager.getAllSessions());
+  await vault.saveTabSessions(tabSessionManager.getTabSessions());
+  if (currentSessionId) {
+    await vault.saveCurrentSessionId(currentSessionId);
+  }
 }
 
-async function saveSessions() {
-  await vault.saveSessions(allSessions);
-  await vault.saveCurrentSessionId(currentSessionId);
+async function getCurrentHistory(tabId = null) {
+  const session = tabId
+    ? tabSessionManager.getSessionForTab(tabId)
+    : (currentSessionId ? tabSessionManager.getAllSessions().find(s => s.id === currentSessionId) : null);
+  return session ? session.history : [];
+}
+
+// Clean up tab session mappings when a tab is closed in Chrome
+if (typeof chrome !== 'undefined' && chrome.tabs && chrome.tabs.onRemoved) {
+  chrome.tabs.onRemoved.addListener((closedTabId) => {
+    tabSessionManager.removeTab(closedTabId);
+    activeTabGenerations.delete(closedTabId);
+    vault.saveTabSessions(tabSessionManager.getTabSessions());
+  });
 }
 
 async function getProviderInstance(providerId, passedConfig = null) {
@@ -101,48 +123,87 @@ chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
   }
 
   if (request.type === 'CLEAR_HISTORY') {
+    const tabId = request.payload?.tabId;
+    if (tabId) {
+      tabSessionManager.clearTabSession(tabId);
+      vault.saveTabSessions(tabSessionManager.getTabSessions());
+    }
     currentSessionId = null;
-    saveSessions();
     subagentManager.clearSubagents();
     sendResponse({ ok: true });
     return true;
   }
 
   if (request.type === 'GET_SESSIONS') {
-    sendResponse({ sessions: allSessions, currentSessionId });
+    const tabId = request.payload?.tabId;
+    const tabSession = tabId ? tabSessionManager.getSessionForTab(tabId) : null;
+    sendResponse({
+      sessions: tabSessionManager.getAllSessions(),
+      currentSessionId: tabSession ? tabSession.id : currentSessionId
+    });
     return true;
   }
 
   if (request.type === 'SWITCH_SESSION') {
-    const { sessionId } = request.payload;
-    if (allSessions.find(s => s.id === sessionId)) {
+    const { sessionId, tabId } = request.payload || {};
+    const session = tabSessionManager.getAllSessions().find(s => s.id === sessionId);
+    if (session) {
       currentSessionId = sessionId;
-      saveSessions();
+      if (tabId) {
+        tabSessionManager.setTabSession(tabId, sessionId);
+      }
+      persistSessionState();
     }
-    getCurrentHistory().then(history => sendResponse({ ok: true, history }));
+    sendResponse({
+      ok: true,
+      history: session ? session.history : [],
+      compactedCount: session?.compactedCount,
+      savedTokens: session?.savedTokens
+    });
     return true;
   }
 
   if (request.type === 'DELETE_SESSION') {
-    const { sessionId } = request.payload;
-    allSessions = allSessions.filter(s => s.id !== sessionId);
+    const { sessionId } = request.payload || {};
+    tabSessionManager.deleteSession(sessionId);
     if (currentSessionId === sessionId) {
-      currentSessionId = allSessions.length > 0 ? allSessions[0].id : null;
+      currentSessionId = null;
     }
-    saveSessions();
+    persistSessionState();
     sendResponse({ ok: true });
     return true;
   }
 
+  if (request.type === 'GET_TAB_SESSION') {
+    const { tabId } = request.payload || {};
+    const session = tabId ? tabSessionManager.getSessionForTab(tabId) : null;
+    const activeGen = tabId ? activeTabGenerations.get(tabId) : null;
+
+    sendResponse({
+      tabId,
+      sessionId: session ? session.id : null,
+      history: session ? session.history : [],
+      compactedSummary: session?.compactedSummary,
+      compactedCount: session?.compactedCount,
+      savedTokens: session?.savedTokens,
+      isGenerating: !!activeGen,
+      generatingMessageId: activeGen?.messageId || null,
+      generatingText: activeGen?.text || ''
+    });
+    return true;
+  }
+
   if (request.type === 'GET_HISTORY') {
-    getCurrentHistory().then(history => {
-      const s = allSessions.find(sess => sess.id === currentSessionId);
-      sendResponse({
-        history,
-        compactedSummary: s?.compactedSummary,
-        compactedCount: s?.compactedCount,
-        savedTokens: s?.savedTokens
-      });
+    const tabId = request.payload?.tabId;
+    const session = tabId
+      ? tabSessionManager.getSessionForTab(tabId)
+      : (currentSessionId ? tabSessionManager.getAllSessions().find(s => s.id === currentSessionId) : null);
+    sendResponse({
+      history: session ? session.history : [],
+      compactedSummary: session?.compactedSummary,
+      compactedCount: session?.compactedCount,
+      savedTokens: session?.savedTokens,
+      sessionId: session ? session.id : null
     });
     return true;
   }
@@ -153,17 +214,42 @@ chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
   }
 
   if (request.type === 'STOP_GENERATION') {
-    const { messageId } = request.payload;
-    if (activeGenerations.has(messageId)) {
+    const { messageId, tabId } = request.payload || {};
+    if (messageId && activeGenerations.has(messageId)) {
       activeGenerations.get(messageId).abort();
       activeGenerations.delete(messageId);
+    } else {
+      for (const [id, ctrl] of activeGenerations.entries()) {
+        try { ctrl.abort(); } catch (_) {}
+      }
+      activeGenerations.clear();
+    }
+    if (tabId) {
+      activeTabGenerations.delete(tabId);
+    } else {
+      activeTabGenerations.clear();
+    }
+    // Force terminate all active subagents immediately
+    subagentManager.terminateAll();
+    // Cancel any pending user confirmations
+    cancelPendingAgentActions();
+
+    if (messageId) {
+      emitStreamChunk(messageId, '\n\n**[Aborted by user]**', true);
     }
     sendResponse({ ok: true });
     return true;
   }
 
+  if (request.type === 'TERMINATE_ALL_SUBAGENTS') {
+    const count = subagentManager.terminateAll();
+    sendResponse({ ok: true, terminatedCount: count });
+    return true;
+  }
+
   if (request.type === 'EXPORT_CHAT') {
-    getCurrentHistory().then(history => sendResponse({ ok: true, messages: history }));
+    const tabId = request.payload?.tabId;
+    getCurrentHistory(tabId).then(history => sendResponse({ ok: true, messages: history }));
     return true;
   }
 
@@ -214,8 +300,9 @@ chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
 });
 
 async function handleCompactContext(payload = {}) {
-  if (!currentSessionId) return { ok: false, error: 'No active session' };
-  const session = allSessions.find(s => s.id === currentSessionId);
+  const sessionId = payload.tabId ? tabSessionManager.getSessionForTab(payload.tabId)?.id : currentSessionId;
+  if (!sessionId) return { ok: false, error: 'No active session' };
+  const session = tabSessionManager.getAllSessions().find(s => s.id === sessionId);
   if (!session || !session.history || session.history.length <= PRESERVED_RECENT_TURNS) {
     return { ok: false, error: `Need at least ${PRESERVED_RECENT_TURNS + 1} messages to compact context.` };
   }
@@ -347,19 +434,20 @@ async function handleSendChat(payload) {
   }
 
   resetTurnSubagentCount();
+  const controller = new AbortController();
+  activeGenerations.set(messageId, controller);
+
   setCurrentActiveContext({
     provider,
     modelId,
     attachments: attachments || [],
-    pageContext
+    pageContext,
+    signal: controller.signal
   });
-
-  const controller = new AbortController();
-  activeGenerations.set(messageId, controller);
 
   // Freeze the active tab at the moment the user sends the message.
   // Agent actions will always target this tab, even if the user switches tabs.
-  let resolvedTabId = frozenTabId;
+  let resolvedTabId = payload.tabId || frozenTabId;
   if (!resolvedTabId) {
     try {
       const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
@@ -367,6 +455,24 @@ async function handleSendChat(payload) {
         resolvedTabId = tab.id;
       }
     } catch (_) {}
+  }
+
+  // Get or create session for this tabId (clean tabs create session ONLY upon user input)
+  const session = tabSessionManager.getOrCreateSessionForTab(resolvedTabId, text);
+  currentSessionId = session.id;
+  await persistSessionState();
+
+  chrome.runtime.sendMessage({
+    type: 'UPDATE_SESSIONS',
+    payload: {
+      sessions: tabSessionManager.getAllSessions(),
+      currentSessionId: session.id,
+      tabId: resolvedTabId
+    }
+  }).catch(() => {});
+
+  if (resolvedTabId) {
+    activeTabGenerations.set(resolvedTabId, { messageId, controller, text: '' });
   }
   
   // Build messages array: system context + full conversation history + new user message
@@ -383,8 +489,7 @@ async function handleSendChat(payload) {
     messages.push({ role: 'system', content: contextStr });
   }
 
-  const rawHistory = await getCurrentHistory();
-  const session = allSessions.find(s => s.id === currentSessionId);
+  const rawHistory = session.history || [];
 
   // Context Compaction: check if session has compacted summary or threshold exceeded
   if (session?.compactedSummary && session.compactedCount) {
@@ -397,12 +502,11 @@ async function handleSendChat(payload) {
   ) {
     const compaction = await compactHistory(rawHistory);
     if (compaction.compactedCount > 0) {
-      if (session) {
-        session.compactedSummary = compaction.summary;
-        session.compactedCount = compaction.compactedCount;
-        session.savedTokens = compaction.savedTokens;
-        await saveSessions();
-      }
+      session.compactedSummary = compaction.summary;
+      session.compactedCount = compaction.compactedCount;
+      session.savedTokens = compaction.savedTokens;
+      await persistSessionState();
+
       messages.push({ role: 'system', content: compaction.summary });
       const uncompacted = rawHistory.slice(compaction.compactedCount);
       messages.push(...uncompacted.map(h => ({ role: h.role, content: h.text })));
@@ -412,7 +516,8 @@ async function handleSendChat(payload) {
         payload: {
           compactedCount: compaction.compactedCount,
           savedTokens: compaction.savedTokens,
-          summary: compaction.summary
+          summary: compaction.summary,
+          tabId: resolvedTabId
         }
       }).catch(() => {});
     } else {
@@ -444,22 +549,9 @@ async function handleSendChat(payload) {
   
   messages.push(userMessage);
   
-  // Track the user message in history (text only for history)
-  if (!currentSessionId) {
-    currentSessionId = Date.now().toString();
-    const title = text.trim();
-    allSessions.push({
-      id: currentSessionId,
-      title: title.length > 25 ? title.substring(0, 25) + '...' : title,
-      createdAt: Date.now(),
-      history: []
-    });
-    chrome.runtime.sendMessage({ type: 'UPDATE_SESSIONS', payload: { sessions: allSessions, currentSessionId } }).catch(() => {});
-  }
-
-  const activeHistory = await getCurrentHistory();
-  activeHistory.push({ role: 'user', text, attachments: attachments || [] });
-  saveSessions();
+  // Track the user message in this tab's session history
+  session.history.push({ role: 'user', text, attachments: attachments || [] });
+  await persistSessionState();
 
   let fullResponse = '';
 
@@ -468,13 +560,16 @@ async function handleSendChat(payload) {
     for await (const chunk of generator) {
       if (controller.signal.aborted) break;
       fullResponse += chunk;
+      const activeGen = resolvedTabId ? activeTabGenerations.get(resolvedTabId) : null;
+      if (activeGen) {
+        activeGen.text = fullResponse;
+      }
       emitStreamChunk(messageId, chunk, false, null, null);
     }
     // Track the AI response in history
     if (fullResponse) {
-      const activeHistory = await getCurrentHistory();
-      activeHistory.push({ role: 'assistant', text: fullResponse });
-      saveSessions();
+      session.history.push({ role: 'assistant', text: fullResponse });
+      await persistSessionState();
     }
   } catch (err) {
     if (err.name !== 'AbortError') {
@@ -487,6 +582,9 @@ async function handleSendChat(payload) {
       emitStreamChunk(messageId, null, true);
     }
     activeGenerations.delete(messageId);
+    if (resolvedTabId) {
+      activeTabGenerations.delete(resolvedTabId);
+    }
   }
 }
 

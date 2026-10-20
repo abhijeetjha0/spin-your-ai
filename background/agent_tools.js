@@ -349,3 +349,22 @@ export function resolveModeSelection(requestId, mode) {
   }
 }
 
+/**
+ * Cancel any pending action confirmations and mode selection prompts.
+ */
+export function cancelPendingAgentActions() {
+  for (const [requestId, resolve] of pendingConfirmations.entries()) {
+    try {
+      resolve(false);
+    } catch (_) {}
+  }
+  pendingConfirmations.clear();
+
+  for (const [requestId, resolve] of pendingModeResolvers.entries()) {
+    try {
+      resolve('allow_some');
+    } catch (_) {}
+  }
+  pendingModeResolvers.clear();
+}
+

@@ -101,6 +101,29 @@ export class SubagentManager {
   }
 
   /**
+   * Force terminate all currently working sub-agents.
+   * @returns {number} Count of terminated sub-agents
+   */
+  terminateAll() {
+    let count = 0;
+    for (const [id, controller] of this.activeControllers.entries()) {
+      try {
+        controller.abort();
+      } catch (_) {}
+      const sa = this.subagents.get(id);
+      if (sa && sa.status === 'working') {
+        sa.status = 'cancelled';
+        sa.completedAt = Date.now();
+        sa.result = sa.result || '[Aborted by user]';
+        count++;
+      }
+    }
+    this.activeControllers.clear();
+    this.notifyStatus();
+    return count;
+  }
+
+  /**
    * Clear completed, cancelled, or failed sub-agents from tracking.
    */
   clearSubagents() {
@@ -134,6 +157,7 @@ export class SubagentManager {
    * @param {Object} [options.pageContext] - Active web page context
    * @param {number} [options.frozenTabId] - Browser tab ID if DOM interaction is relevant
    * @param {number} [options.maxTurns] - Maximum tool turns allowed for this sub-agent (default 12)
+   * @param {AbortSignal} [options.signal] - Optional parent abort signal
    * @returns {Promise<Object>} Execution result with subagent_id, role, status, result
    */
   async spinSubagent({
@@ -146,7 +170,8 @@ export class SubagentManager {
     attachments = [],
     pageContext = null,
     frozenTabId = null,
-    maxTurns = 12
+    maxTurns = 12,
+    signal = null
   }) {
     if (!task) {
       throw new Error('Sub-agent requires a task description.');
@@ -195,7 +220,54 @@ export class SubagentManager {
 
     const controller = new AbortController();
     this.activeControllers.set(subagent.id, controller);
+
+    // Chain parent signal if provided
+    let removeAbortListener = null;
+    if (signal) {
+      if (signal.aborted) {
+        controller.abort();
+      } else {
+        const onParentAbort = () => {
+          try {
+            controller.abort();
+          } catch (_) {}
+        };
+        signal.addEventListener('abort', onParentAbort, { once: true });
+        removeAbortListener = () => signal.removeEventListener('abort', onParentAbort);
+      }
+    }
+
     this.notifyStatus();
+
+    // Guard: if aborted before running
+    if (controller.signal.aborted) {
+      subagent.status = 'cancelled';
+      subagent.result = '[Aborted by user]';
+      subagent.completedAt = Date.now();
+      this.activeControllers.delete(subagent.id);
+      if (removeAbortListener) removeAbortListener();
+      this.notifyStatus();
+      if (typeof this.onExecutionEnd === 'function') {
+        this.onExecutionEnd();
+      }
+      return {
+        subagent_id: subagent.id,
+        role: subagent.role,
+        status: 'cancelled',
+        result: subagent.result,
+        turns_completed: 0
+      };
+    }
+
+    // Safety timeout: 120s limit per subagent to prevent infinite hangs
+    const timeoutId = setTimeout(() => {
+      if (subagent.status === 'working') {
+        try {
+          controller.abort();
+        } catch (_) {}
+        subagent.error = 'Sub-agent timed out (120s limit).';
+      }
+    }, 120000);
 
     try {
       // Build user prompt for this sub-agent turn
@@ -278,18 +350,25 @@ export class SubagentManager {
       };
     } catch (err) {
       this.activeControllers.delete(subagent.id);
-      subagent.status = 'failed';
-      subagent.error = err.message || 'Unknown error';
+      if (controller.signal.aborted || err.name === 'AbortError') {
+        subagent.status = 'cancelled';
+        subagent.result = '[Aborted by user]';
+      } else {
+        subagent.status = 'failed';
+        subagent.error = err.message || 'Unknown error';
+      }
       subagent.completedAt = Date.now();
       this.notifyStatus();
 
       return {
         subagent_id: subagent.id,
         role: subagent.role,
-        status: 'failed',
-        error: subagent.error
+        status: subagent.status,
+        error: subagent.error || subagent.result
       };
     } finally {
+      clearTimeout(timeoutId);
+      if (removeAbortListener) removeAbortListener();
       if (typeof this.onExecutionEnd === 'function') {
         this.onExecutionEnd();
       }

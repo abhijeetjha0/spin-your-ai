@@ -57,6 +57,8 @@ export class OpenAIProvider extends BaseProvider {
     let currentMessages = [...formattedMessages];
 
     while (true) {
+      if (signal?.aborted) break;
+
       const payload = {
         model: modelId,
         messages: currentMessages,
@@ -87,6 +89,7 @@ export class OpenAIProvider extends BaseProvider {
       let toolCallsBuffer = {};
 
       for await (const data of parseSSE(res)) {
+        if (signal?.aborted) break;
         if (!data.choices || data.choices.length === 0) continue;
         const delta = data.choices[0].delta;
 
@@ -110,6 +113,8 @@ export class OpenAIProvider extends BaseProvider {
         }
       }
 
+      if (signal?.aborted) break;
+
       const toolCalls = Object.values(toolCallsBuffer);
       
       if (toolCalls.length > 0) {
@@ -131,9 +136,16 @@ export class OpenAIProvider extends BaseProvider {
 
         const toolResults = await Promise.all(
           toolCalls.map(async (tc) => {
+            if (signal?.aborted) {
+              return {
+                role: 'tool',
+                tool_call_id: tc.id,
+                content: 'Aborted by user'
+              };
+            }
             try {
               const args = JSON.parse(tc.function.arguments);
-              const result = await executeTool(tc.function.name, args, frozenTabId);
+              const result = await executeTool(tc.function.name, args, frozenTabId, signal);
               let contentStr = typeof result === 'string' ? result : JSON.stringify(result);
               contentStr = smartTruncate(contentStr, 8000);
               return {
@@ -150,6 +162,8 @@ export class OpenAIProvider extends BaseProvider {
             }
           })
         );
+
+        if (signal?.aborted) break;
 
         for (const tr of toolResults) {
           currentMessages.push(tr);
