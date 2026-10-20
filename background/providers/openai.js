@@ -1,6 +1,7 @@
 import { BaseProvider } from './base.js';
 import { parseSSE } from '../../shared/stream-parser.js';
 import { getActiveTools, executeTool } from '../tools.js';
+import { smartTruncate } from '../../shared/toolCache.js';
 
 export class OpenAIProvider extends BaseProvider {
   constructor(config) {
@@ -33,6 +34,8 @@ export class OpenAIProvider extends BaseProvider {
     }
 
     const tools = await getActiveTools(options);
+    const maxToolTurns = options.maxToolTurns || (options.isSubagent ? 12 : 35);
+    let toolTurns = 0;
 
     // Convert multimodal content to OpenAI format
     const formattedMessages = messages.map(m => {
@@ -110,6 +113,12 @@ export class OpenAIProvider extends BaseProvider {
       const toolCalls = Object.values(toolCallsBuffer);
       
       if (toolCalls.length > 0) {
+        toolTurns++;
+        if (toolTurns > maxToolTurns) {
+          yield `\n\n> <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;color:#f59e0b">warning</span> *Tool turn limit reached (${maxToolTurns} turns). Stopping automated execution to synthesize final response.*`;
+          break;
+        }
+
         for (const tc of toolCalls) {
           yield `\n\n> <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;color:#a78bfa">settings</span> *Executing tool \`${tc.function.name}\`...*\n\n`;
         }
@@ -120,22 +129,30 @@ export class OpenAIProvider extends BaseProvider {
           content: null
         });
 
-        for (const tc of toolCalls) {
-          try {
-            const args = JSON.parse(tc.function.arguments);
-            const result = await executeTool(tc.function.name, args, frozenTabId);
-            currentMessages.push({
-              role: 'tool',
-              tool_call_id: tc.id,
-              content: typeof result === 'string' ? result : JSON.stringify(result)
-            });
-          } catch (err) {
-            currentMessages.push({
-              role: 'tool',
-              tool_call_id: tc.id,
-              content: `Error executing tool: ${err.message}`
-            });
-          }
+        const toolResults = await Promise.all(
+          toolCalls.map(async (tc) => {
+            try {
+              const args = JSON.parse(tc.function.arguments);
+              const result = await executeTool(tc.function.name, args, frozenTabId);
+              let contentStr = typeof result === 'string' ? result : JSON.stringify(result);
+              contentStr = smartTruncate(contentStr, 8000);
+              return {
+                role: 'tool',
+                tool_call_id: tc.id,
+                content: contentStr
+              };
+            } catch (err) {
+              return {
+                role: 'tool',
+                tool_call_id: tc.id,
+                content: `Error executing tool: ${err.message}`
+              };
+            }
+          })
+        );
+
+        for (const tr of toolResults) {
+          currentMessages.push(tr);
         }
         
         // Loop continues to send tool result back to the model

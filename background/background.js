@@ -371,6 +371,9 @@ async function handleSendChat(payload) {
   
   // Build messages array: system context + full conversation history + new user message
   const messages = [];
+
+  const baseSystemDirective = 'You are Spin Your AI, an autonomous multimodal AI assistant. When you need to execute multiple independent actions (such as inspecting page elements, invoking MCP tools, or spawning sub-agents), invoke them together in parallel within a single turn rather than executing them one at a time.';
+  messages.push({ role: 'system', content: baseSystemDirective });
   
   if (pageContext) {
     let contextStr = `Here is the context of the webpage the user is currently viewing:\nURL: ${pageContext.url}\nTitle: ${pageContext.title}\n\nContent:\n${pageContext.text}`;

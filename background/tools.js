@@ -54,6 +54,10 @@ export const SUBAGENT_TOOLS = [
           subagent_id: {
             type: 'string',
             description: 'Optional ID of a previously spun sub-agent to continue its existing conversation context.'
+          },
+          max_turns: {
+            type: 'integer',
+            description: 'Optional maximum tool turns allowed for this sub-agent (default 12).'
           }
         },
         required: ['role', 'task']
@@ -106,7 +110,8 @@ export async function executeTool(toolName, args, frozenTabId) {
       modelId: currentActiveContext.modelId,
       attachments: currentActiveContext.attachments,
       pageContext: currentActiveContext.pageContext,
-      frozenTabId
+      frozenTabId,
+      maxTurns: args.max_turns || 12
     });
   }
 

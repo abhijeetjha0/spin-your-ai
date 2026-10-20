@@ -24,7 +24,7 @@ export class AnthropicProvider extends BaseProvider {
     if (!this.apiKey) throw new Error('Anthropic API Key is not configured.');
 
     // Anthropic Messages API expects system prompt separate from messages array
-    const systemMessage = messages.find(m => m.role === 'system')?.content || '';
+    const systemMessage = messages.filter(m => m.role === 'system').map(m => m.content).filter(Boolean).join('\n\n');
     const chatMessages = messages.filter(m => m.role !== 'system');
 
     const formattedMessages = chatMessages.map(m => {

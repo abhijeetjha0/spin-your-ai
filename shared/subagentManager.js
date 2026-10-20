@@ -133,6 +133,7 @@ export class SubagentManager {
    * @param {Array} [options.attachments] - Multimodal files or attachments
    * @param {Object} [options.pageContext] - Active web page context
    * @param {number} [options.frozenTabId] - Browser tab ID if DOM interaction is relevant
+   * @param {number} [options.maxTurns] - Maximum tool turns allowed for this sub-agent (default 12)
    * @returns {Promise<Object>} Execution result with subagent_id, role, status, result
    */
   async spinSubagent({
@@ -144,7 +145,8 @@ export class SubagentManager {
     modelId = 'default',
     attachments = [],
     pageContext = null,
-    frozenTabId = null
+    frozenTabId = null,
+    maxTurns = 12
   }) {
     if (!task) {
       throw new Error('Sub-agent requires a task description.');
@@ -179,7 +181,7 @@ export class SubagentManager {
       this.subagents.set(id, subagent);
 
       // Initialize system context in sub-agent history with pageContext if available
-      let systemPrompt = `You are an autonomous specialized sub-agent for Spin Your AI. Role: ${subagent.role}.\nYour goal: Execute the assigned task efficiently and provide a thorough, accurate outcome.\nAlways return your findings clearly.`;
+      let systemPrompt = `You are an autonomous specialized sub-agent for Spin Your AI. Role: ${subagent.role}.\nYour goal: Execute the assigned task efficiently and provide a thorough, accurate outcome.\nWhen executing multiple independent actions (such as DOM inspections or MCP queries), invoke tools in parallel within a single turn.\nAlways return your findings clearly.`;
       if (pageContext) {
         systemPrompt += `\n\n--- Current Web Page Context ---\nURL: ${pageContext.url || 'N/A'}\nTitle: ${pageContext.title || 'N/A'}\n\nContent:\n${pageContext.text || ''}\n--- End Web Page Context ---`;
       }
@@ -235,7 +237,10 @@ export class SubagentManager {
       let fullResponse = '';
 
       if (provider && typeof provider.chat === 'function') {
-        const stream = provider.chat(modelId, messagesForProvider, controller.signal, frozenTabId, { isSubagent: true });
+        const stream = provider.chat(modelId, messagesForProvider, controller.signal, frozenTabId, {
+          isSubagent: true,
+          maxToolTurns: maxTurns
+        });
         for await (const chunk of stream) {
           if (controller.signal.aborted) break;
           // Filter out markdown tool status tags if any

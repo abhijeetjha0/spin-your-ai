@@ -1,6 +1,7 @@
 import { BaseProvider } from './base.js';
 import { parseSSE } from '../../shared/stream-parser.js';
 import { getActiveTools, executeTool } from '../tools.js';
+import { smartTruncate } from '../../shared/toolCache.js';
 
 export class GeminiProvider extends BaseProvider {
   constructor(config) {
@@ -37,6 +38,7 @@ export class GeminiProvider extends BaseProvider {
     if (!this.apiKey) throw new Error('Gemini API Key is not configured.');
 
     const mcpTools = await getActiveTools(options);
+    const maxToolTurns = options.maxToolTurns || (options.isSubagent ? 12 : 35);
 
     // Convert standard format to Gemini format
     const contents = messages.filter(m => m.role !== 'system').map(m => {
@@ -57,7 +59,7 @@ export class GeminiProvider extends BaseProvider {
       return { role, parts };
     });
     
-    const systemInstruction = messages.find(m => m.role === 'system')?.content;
+    const systemInstruction = messages.filter(m => m.role === 'system').map(m => m.content).filter(Boolean).join('\n\n');
     let currentContents = [...contents];
     let toolCallCount = 0;
 
@@ -152,8 +154,9 @@ export class GeminiProvider extends BaseProvider {
 
       if (toolCallsBuffer.length > 0) {
         toolCallCount++;
-        if (toolCallCount > 50) {
-          throw new Error('Too many sequential tool calls (>50). The model may be stuck in a loop.');
+        if (toolCallCount > maxToolTurns) {
+          yield `\n\n> <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;color:#f59e0b">warning</span> *Tool turn limit reached (${maxToolTurns} turns). Stopping automated execution to synthesize final response.*`;
+          break;
         }
 
         // Append the model's exact generated parts to our history
@@ -162,27 +165,37 @@ export class GeminiProvider extends BaseProvider {
           parts: modelParts
         });
 
-        const functionResponses = [];
         for (const tc of toolCallsBuffer) {
            yield `\n\n> <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;color:#a78bfa">settings</span> *Executing tool \`${tc.name}\`...*\n\n`;
-           try {
-             const result = await executeTool(tc.name, tc.args, frozenTabId);
-             functionResponses.push({
-               functionResponse: {
-                 name: tc.name,
-                 response: typeof result === 'object' && result !== null ? result : { result }
-               }
-             });
-           } catch(e) {
-              yield `\n\n> <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;color:#ef4444">error</span> *Tool error: ${e.message}*\n\n`;
-              functionResponses.push({
-               functionResponse: {
-                 name: tc.name,
-                 response: { error: e.message }
-               }
-             });
-           }
         }
+
+        const functionResponses = await Promise.all(
+          toolCallsBuffer.map(async (tc) => {
+            try {
+              const result = await executeTool(tc.name, tc.args, frozenTabId);
+              let responsePayload = typeof result === 'object' && result !== null ? result : { result };
+              const strRep = JSON.stringify(responsePayload);
+              if (strRep.length > 8000) {
+                responsePayload = {
+                  result: smartTruncate(strRep, 8000)
+                };
+              }
+              return {
+                functionResponse: {
+                  name: tc.name,
+                  response: responsePayload
+                }
+              };
+            } catch (e) {
+              return {
+                functionResponse: {
+                  name: tc.name,
+                  response: { error: e.message }
+                }
+              };
+            }
+          })
+        );
         
         currentContents.push({
           role: 'user',

@@ -10,9 +10,13 @@
  */
 
 import { vault } from './vault.js';
+import { toolCache } from '../shared/toolCache.js';
 
 // Actions that require user confirmation before executing
 const DESTRUCTIVE_ACTIONS = new Set(['click', 'select', 'drag_drop', 'navigate']);
+
+// Actions that mutate page state and invalidate cached DOM snapshots
+const MUTATING_ACTIONS = new Set(['click', 'fill', 'select', 'drag_drop', 'navigate']);
 
 // Pending confirmation promises keyed by a unique request ID
 const pendingConfirmations = new Map();
@@ -218,6 +222,19 @@ export async function executeAgentTool(toolName, args, frozenTabId) {
   }
   // 3. Mode: ALLOW_ALL — All actions (including destructive ones) execute automatically without confirmation
 
+  // Check cache for idempotent browser inspection tools
+  if (toolCache.isIdempotent(toolName)) {
+    const cachedResult = toolCache.get(toolName, args);
+    if (cachedResult !== null) {
+      return cachedResult;
+    }
+  }
+
+  // Invalidate cache if this action mutates page or DOM state
+  if (MUTATING_ACTIONS.has(actionType)) {
+    toolCache.invalidate();
+  }
+
   // Execute navigation directly via background API
   if (actionType === 'navigate') {
     return new Promise((resolve) => {
@@ -244,6 +261,9 @@ export async function executeAgentTool(toolName, args, frozenTabId) {
       type: 'AGENT_ACTION',
       action
     });
+    if (result && result.ok !== false && toolCache.isIdempotent(toolName)) {
+      toolCache.set(toolName, args, result);
+    }
     return result ?? { ok: false, error: 'No response from content script. Try refreshing the page.' };
   } catch (err) {
     return { ok: false, error: `Could not reach content script on this tab: ${err.message}. Try refreshing the page.` };
