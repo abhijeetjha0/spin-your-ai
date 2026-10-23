@@ -206,6 +206,23 @@ async function init() {
     }
   });
 
+  // Kebab overflow menu toggle
+  const moreBtn = document.getElementById('more-btn');
+  const kebabMenu = document.getElementById('kebab-menu');
+  moreBtn?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    kebabMenu?.classList.toggle('hidden');
+  });
+  kebabMenu?.addEventListener('click', () => kebabMenu.classList.add('hidden'));
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') kebabMenu?.classList.add('hidden');
+  });
+  document.addEventListener('click', (e) => {
+    if (kebabMenu && !kebabMenu.classList.contains('hidden') && !moreBtn?.contains(e.target)) {
+      kebabMenu.classList.add('hidden');
+    }
+  });
+
   // Agent permission mode handlers
   agentPermissionBtn?.addEventListener('click', () => showAgentModeModal());
   closeAgentModeBtn?.addEventListener('click', () => hideAgentModeModal());

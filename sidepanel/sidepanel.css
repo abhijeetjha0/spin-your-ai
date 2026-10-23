@@ -20,6 +20,7 @@ body {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  min-width: 260px;
 }
 
 .glassmorphism {
@@ -37,14 +38,14 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 12px 16px;
+  padding: 8px 12px;
   z-index: 10;
 }
 
 .header-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
 }
 
 .model-combobox {
@@ -160,12 +161,64 @@ body {
   border: none;
   color: var(--text-muted);
   cursor: pointer;
-  font-size: 16px;
-  padding: 4px;
+  font-size: 14px;
+  padding: 3px;
   border-radius: 4px;
   transition: color 0.2s;
 }
-.icon-btn:hover { color: var(--text-main); background: rgba(255,255,255,0.1); }
+.icon-btn .material-symbols-outlined { font-size: 18px; }
+.icon-btn:hover { color: var(--text-main); background: rgba(255,255,255,0.08); }
+
+/* ── Kebab overflow menu ── */
+.kebab-wrapper {
+  position: relative;
+}
+
+.kebab-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  background: var(--panel-bg);
+  border: 1px solid var(--border-color);
+  z-index: 500;
+  min-width: 170px;
+  animation: slideUp 0.12s ease-out;
+}
+
+.kebab-menu.hidden { display: none; }
+
+.kebab-menu-title {
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+  padding: 7px 12px 4px;
+  border-bottom: 1px solid #1a1a1a;
+  font-family: var(--font-mono);
+}
+
+.kebab-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 8px 12px;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid #111;
+  color: var(--text-main);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  cursor: pointer;
+  text-align: left;
+  white-space: nowrap;
+}
+.kebab-item:last-child { border-bottom: none; }
+.kebab-item:hover { background: #111; }
+.kebab-item .material-symbols-outlined {
+  font-size: 15px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
 
 .chat-area {
   flex: 1;
@@ -308,6 +361,8 @@ body {
   border: 1px solid var(--border-color);
   transition: all 0.2s;
   font-family: var(--font-mono);
+  white-space: nowrap;
+  user-select: none;
 }
 
 .toggle-pill input { display: none; }
@@ -354,8 +409,20 @@ body {
   outline: none;
   max-height: 150px;
   padding: 6px 0;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
-#chat-input::placeholder { color: var(--text-muted); }
+#chat-input:placeholder-shown {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+#chat-input::placeholder {
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 
 .send-btn, .stop-btn {
   background: #111;

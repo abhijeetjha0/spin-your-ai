@@ -32,17 +32,29 @@
       <div class="header-actions">
         <button id="agent-permission-btn" class="icon-btn" title="Agent Permission Mode"><span
             class="material-symbols-outlined">security</span></button>
-        <button id="compact-btn" class="icon-btn" title="Compact Context (Save Tokens)"><span
-            class="material-symbols-outlined">compress</span></button>
-        <button id="reload-models-btn" class="icon-btn" title="Reload Models"><span
-            class="material-symbols-outlined">refresh</span></button>
-        <button id="export-chat-btn" class="icon-btn" title="Export Chat"><span
-            class="material-symbols-outlined">download</span></button>
         <button id="new-chat-btn" class="icon-btn" title="New Chat"><span
             class="material-symbols-outlined">add</span></button>
-        <button id="help-btn" class="icon-btn" title="Help"><span class="material-symbols-outlined">help</span></button>
         <button id="options-btn" class="icon-btn" title="Settings"><span
             class="material-symbols-outlined">settings</span></button>
+        <div class="kebab-wrapper">
+          <button id="more-btn" class="icon-btn" title="More Options"><span
+              class="material-symbols-outlined">more_vert</span></button>
+          <div id="kebab-menu" class="kebab-menu hidden">
+            <div class="kebab-menu-title">MORE OPTIONS</div>
+            <button id="compact-btn" class="kebab-item" title="Compact Context (Save Tokens)">
+              <span class="material-symbols-outlined">compress</span><span>Compact Context</span>
+            </button>
+            <button id="reload-models-btn" class="kebab-item" title="Reload Models">
+              <span class="material-symbols-outlined">refresh</span><span>Reload Models</span>
+            </button>
+            <button id="export-chat-btn" class="kebab-item" title="Export Chat">
+              <span class="material-symbols-outlined">download</span><span>Export Chat</span>
+            </button>
+            <button id="help-btn" class="kebab-item" title="Help">
+              <span class="material-symbols-outlined">help</span><span>Help</span>
+            </button>
+          </div>
+        </div>
       </div>
     </header>
 
