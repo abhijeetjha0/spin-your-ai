@@ -1,5 +1,6 @@
 import { BaseProvider } from './base.js';
 import { parseSSE } from '../../shared/stream-parser.js';
+import { CacheMetricsService } from '../cache_metrics.js';
 
 export class AnthropicProvider extends BaseProvider {
   constructor(config) {
@@ -46,6 +47,14 @@ export class AnthropicProvider extends BaseProvider {
       return { role, content: m.content };
     });
 
+    const systemPayload = systemMessage ? [
+      {
+        type: 'text',
+        text: systemMessage,
+        cache_control: { type: 'ephemeral' }
+      }
+    ] : undefined;
+
     const res = await fetch(`${this.baseUrl}/messages`, {
       method: 'POST',
       headers: {
@@ -56,7 +65,7 @@ export class AnthropicProvider extends BaseProvider {
       },
       body: JSON.stringify({
         model: modelId,
-        system: systemMessage,
+        ...(systemPayload ? { system: systemPayload } : {}),
         messages: formattedMessages,
         stream: true,
         max_tokens: 4096
@@ -69,9 +78,24 @@ export class AnthropicProvider extends BaseProvider {
       throw new Error(errorData.error?.message || `Anthropic Error: ${res.status}`);
     }
 
+    let inputUsage = null;
+
     for await (const data of parseSSE(res)) {
+      if (data.type === 'message_start' && data.message?.usage) {
+        inputUsage = data.message.usage;
+      }
       if (data.type === 'content_block_delta' && data.delta?.text) {
         yield data.delta.text;
+      }
+      if (data.type === 'message_delta' && data.usage) {
+        const fullUsage = {
+          ...inputUsage,
+          ...data.usage
+        };
+        const normalized = CacheMetricsService.normalizeUsage(fullUsage, 'anthropic');
+        if (normalized) {
+          yield { text: '', usage: normalized };
+        }
       }
     }
   }

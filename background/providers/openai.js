@@ -2,6 +2,7 @@ import { BaseProvider } from './base.js';
 import { parseSSE } from '../../shared/stream-parser.js';
 import { getActiveTools, executeTool } from '../tools.js';
 import { smartTruncate } from '../../shared/toolCache.js';
+import { CacheMetricsService } from '../cache_metrics.js';
 
 export class OpenAIProvider extends BaseProvider {
   constructor(config) {
@@ -59,19 +60,50 @@ export class OpenAIProvider extends BaseProvider {
     while (true) {
       if (signal?.aborted) break;
 
+      let messagesToSend = currentMessages;
+      if (this.id === 'openrouter') {
+        messagesToSend = currentMessages.map((msg, idx) => {
+          if (idx === 0 && msg.role === 'system' && typeof msg.content === 'string') {
+            return {
+              role: msg.role,
+              content: [
+                { type: 'text', text: msg.content, cache_control: { type: 'ephemeral' } }
+              ]
+            };
+          }
+          return msg;
+        });
+      }
+
       const payload = {
         model: modelId,
-        messages: currentMessages,
-        stream: true
+        messages: messagesToSend,
+        stream: true,
+        stream_options: { include_usage: true }
       };
       
       if (this.supportsTools !== false && tools.length > 0) {
-        payload.tools = tools;
+        const sortedTools = [...tools].sort((a, b) => (a.function?.name || '').localeCompare(b.function?.name || ''));
+        if (this.id === 'openrouter') {
+          payload.tools = sortedTools.map((t, idx) => {
+            const toolCopy = { ...t };
+            if (idx === sortedTools.length - 1) {
+              toolCopy.cache_control = { type: 'ephemeral' };
+            }
+            return toolCopy;
+          });
+        } else {
+          payload.tools = sortedTools;
+        }
       }
 
       const headers = { 'Content-Type': 'application/json' };
       if (this.apiKey) {
         headers['Authorization'] = `Bearer ${this.apiKey}`;
+      }
+      if (this.id === 'openrouter') {
+        headers['HTTP-Referer'] = 'https://github.com/abhijeetjha0/spin-your-ai';
+        headers['X-Title'] = 'Spin Your AI';
       }
 
       const res = await fetch(`${this.baseUrl}/chat/completions`, {
@@ -90,6 +122,14 @@ export class OpenAIProvider extends BaseProvider {
 
       for await (const data of parseSSE(res)) {
         if (signal?.aborted) break;
+
+        if (data.usage) {
+          const normalized = CacheMetricsService.normalizeUsage(data.usage, this.id);
+          if (normalized) {
+            yield { text: '', usage: normalized };
+          }
+        }
+
         if (!data.choices || data.choices.length === 0) continue;
         const delta = data.choices[0].delta;
 

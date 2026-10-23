@@ -188,7 +188,8 @@ chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
       savedTokens: session?.savedTokens,
       isGenerating: !!activeGen,
       generatingMessageId: activeGen?.messageId || null,
-      generatingText: activeGen?.text || ''
+      generatingText: activeGen?.text || '',
+      generatingUsage: activeGen?.usage || null
     });
     return true;
   }
@@ -554,32 +555,47 @@ async function handleSendChat(payload) {
   await persistSessionState();
 
   let fullResponse = '';
+  let lastUsage = null;
 
   try {
     const generator = provider.chat(modelId, messages, controller.signal, resolvedTabId);
     for await (const chunk of generator) {
       if (controller.signal.aborted) break;
-      fullResponse += chunk;
+      let textChunk = '';
+      let usageChunk = null;
+      if (typeof chunk === 'object' && chunk !== null) {
+        textChunk = chunk.text || '';
+        usageChunk = chunk.usage || null;
+      } else {
+        textChunk = chunk || '';
+      }
+      if (usageChunk) {
+        lastUsage = usageChunk;
+      }
+      fullResponse += textChunk;
       const activeGen = resolvedTabId ? activeTabGenerations.get(resolvedTabId) : null;
       if (activeGen) {
         activeGen.text = fullResponse;
+        if (lastUsage) {
+          activeGen.usage = lastUsage;
+        }
       }
-      emitStreamChunk(messageId, chunk, false, null, null);
+      emitStreamChunk(messageId, textChunk, false, null, usageChunk);
     }
     // Track the AI response in history
     if (fullResponse) {
-      session.history.push({ role: 'assistant', text: fullResponse });
+      session.history.push({ role: 'assistant', text: fullResponse, usage: lastUsage });
       await persistSessionState();
     }
   } catch (err) {
     if (err.name !== 'AbortError') {
-      emitStreamChunk(messageId, null, true, err.message);
+      emitStreamChunk(messageId, null, true, err.message, lastUsage);
     }
   } finally {
     if (controller.signal.aborted) {
-      emitStreamChunk(messageId, '\n\n**[Aborted by user]**', true);
+      emitStreamChunk(messageId, '\n\n**[Aborted by user]**', true, null, lastUsage);
     } else {
-      emitStreamChunk(messageId, null, true);
+      emitStreamChunk(messageId, null, true, null, lastUsage);
     }
     activeGenerations.delete(messageId);
     if (resolvedTabId) {
@@ -588,10 +604,10 @@ async function handleSendChat(payload) {
   }
 }
 
-function emitStreamChunk(messageId, chunk, done, error = null) {
+function emitStreamChunk(messageId, chunk, done, error = null, usage = null) {
   chrome.runtime.sendMessage({
     type: 'CHAT_STREAM',
-    payload: { messageId, chunk, done, error }
+    payload: { messageId, chunk, done, error, usage }
   }).catch(() => {
     // Port might be closed if UI is closed
   });

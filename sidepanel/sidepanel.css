@@ -1235,4 +1235,64 @@ body {
   text-overflow: ellipsis;
 }
 
+/* Message Meta Footer & Cache Badge */
+.message-meta-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 8px;
+  padding-top: 4px;
+  border-top: 1px dotted rgba(255, 255, 255, 0.1);
+}
+
+.cache-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  background: #111;
+  border: 1px solid var(--border-color);
+  padding: 1px 5px;
+  border-radius: 0;
+  user-select: none;
+  cursor: help;
+  line-height: 1.2;
+}
+
+.cache-badge .material-symbols-outlined {
+  font-size: 12px;
+  color: #7dd3fc;
+}
+
+.cache-text {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.message-meta-footer .copy-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-muted);
+  padding: 2px 4px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.message-meta-footer .copy-btn .material-symbols-outlined {
+  font-size: 13px;
+}
+
+.message-meta-footer .copy-btn:hover {
+  color: var(--text-main);
+  background: #111;
+  border-color: var(--border-color);
+}
+
+
 

@@ -1,4 +1,5 @@
 import { renderMarkdown } from '../shared/markdown.js';
+import { CacheMetricsService } from '../shared/cacheMetrics.js';
 import {
   filterSlashCommands,
   extractSlashQuery,
@@ -132,6 +133,7 @@ async function syncTabSession(tabId) {
         isGenerating = true;
         currentMessageId = res.generatingMessageId;
         currentAiText = res.generatingText || '';
+        currentAiUsage = res.generatingUsage || null;
         chatInput.disabled = true;
         attachBtn.disabled = true;
         chatInput.placeholder = "Processing...";
@@ -631,7 +633,7 @@ async function init() {
   // Listen for active model changes, stream chunks, session updates, and agent confirmations
   chrome.runtime.onMessage.addListener((msg, _sender, _sendResponse) => {
     if (msg.type === 'CHAT_STREAM' && msg.payload.messageId === currentMessageId) {
-      handleStreamChunk(msg.payload.chunk, msg.payload.done, msg.payload.error);
+      handleStreamChunk(msg.payload.chunk, msg.payload.done, msg.payload.error, msg.payload.usage);
     } else if (msg.type === 'PROVIDERS_UPDATED') {
       loadProviders();
     } else if (msg.type === 'CONTEXT_COMPACTED') {
@@ -941,6 +943,8 @@ function renderHistory(history) {
     } else if (item.role === 'assistant') {
       const aiEl = appendMessage('AI', item.text, 'ai-msg');
       aiEl.innerHTML = renderMarkdown(item.text);
+      const footer = createMessageFooter(item.text, item.usage);
+      aiEl.appendChild(footer);
     } else {
       appendMessage('System', item.text, 'system-msg');
     }
@@ -949,8 +953,47 @@ function renderHistory(history) {
 }
 
 let currentAiText = '';
+let currentAiUsage = null;
 
-function handleStreamChunk(chunk, done, error) {
+function createMessageFooter(rawText, usage) {
+  const footer = document.createElement('div');
+  footer.className = 'message-meta-footer';
+
+  if (usage && (usage.totalTokens > 0 || usage.cachedTokens > 0)) {
+    const badge = document.createElement('span');
+    badge.className = 'cache-badge';
+
+    const label = CacheMetricsService.formatCacheLabel(usage);
+    badge.title = CacheMetricsService.formatTooltip(usage);
+
+    badge.innerHTML = `
+      <span class="material-symbols-outlined">bolt</span>
+      <span class="cache-text">${label}</span>
+    `;
+    footer.appendChild(badge);
+  }
+
+  const copyBtn = document.createElement('button');
+  copyBtn.className = 'copy-btn icon-btn';
+  copyBtn.title = 'Copy Message';
+  copyBtn.innerHTML = '<span class="material-symbols-outlined">content_copy</span>';
+  copyBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(rawText).catch(() => {});
+    }
+    copyBtn.innerHTML = '<span class="material-symbols-outlined">check</span>';
+    showToast('Copied to clipboard');
+    setTimeout(() => {
+      copyBtn.innerHTML = '<span class="material-symbols-outlined">content_copy</span>';
+    }, 1500);
+  });
+  footer.appendChild(copyBtn);
+
+  return footer;
+}
+
+function handleStreamChunk(chunk, done, error, usage) {
   if (!isGenerating) return;
   
   const msgEl = document.getElementById(`msg-${currentMessageId}`);
@@ -961,6 +1004,10 @@ function handleStreamChunk(chunk, done, error) {
     msgEl.style.color = '#ef4444';
     finishGeneration();
     return;
+  }
+
+  if (usage) {
+    currentAiUsage = usage;
   }
 
   if (chunk) {
@@ -987,6 +1034,10 @@ function handleStreamChunk(chunk, done, error) {
   }
 
   if (done) {
+    if (msgEl && !msgEl.querySelector('.message-meta-footer')) {
+      const footer = createMessageFooter(currentAiText, currentAiUsage);
+      msgEl.appendChild(footer);
+    }
     finishGeneration();
   }
 }
@@ -997,9 +1048,10 @@ function finishGeneration() {
     window.thinkingInterval = null;
   }
   isGenerating = false;
+  currentAiUsage = null;
   chatInput.disabled = false;
   attachBtn.disabled = false;
-  chatInput.placeholder = "Ask anything... (/ for commands & skills)";
+  chatInput.placeholder = "/ for commands & skills...";
   currentMessageId = null;
   currentAiText = '';
   stopBtn.classList.add('hidden');

@@ -2,6 +2,7 @@ import { BaseProvider } from './base.js';
 import { parseSSE } from '../../shared/stream-parser.js';
 import { getActiveTools, executeTool } from '../tools.js';
 import { smartTruncate } from '../../shared/toolCache.js';
+import { CacheMetricsService } from '../cache_metrics.js';
 
 export class GeminiProvider extends BaseProvider {
   constructor(config) {
@@ -114,8 +115,9 @@ export class GeminiProvider extends BaseProvider {
           return clean;
         };
 
+        const sortedTools = [...mcpTools].sort((a, b) => (a.function?.name || '').localeCompare(b.function?.name || ''));
         body.tools = [{
-          function_declarations: mcpTools.map(t => ({
+          function_declarations: sortedTools.map(t => ({
             name: t.function.name,
             description: t.function.description || 'No description',
             parameters: sanitizeSchema(t.function.parameters)
@@ -141,6 +143,14 @@ export class GeminiProvider extends BaseProvider {
 
       for await (const data of parseSSE(res)) {
         if (signal?.aborted) break;
+
+        if (data.usageMetadata) {
+          const normalized = CacheMetricsService.normalizeUsage(data.usageMetadata, 'gemini');
+          if (normalized) {
+            yield { text: '', usage: normalized };
+          }
+        }
+
         const parts = data.candidates?.[0]?.content?.parts;
         if (!parts) continue;
         
